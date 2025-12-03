@@ -12,8 +12,8 @@ services:
     volumes:
       - telegram_sessions:/app/sessions
       - ./app:/app/app:ro
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
     networks:
       - proxy-net
     depends_on:
@@ -47,7 +47,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Caddy reverse proxy (обновленный)
+  # Caddy reverse proxy
   caddy:
     image: caddy:2-alpine
     container_name: caddy-proxy
