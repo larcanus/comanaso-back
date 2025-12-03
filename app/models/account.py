@@ -1,0 +1,100 @@
+"""
+SQLAlchemy модель Telegram аккаунта.
+Хранит данные о подключенных Telegram аккаунтах.
+"""
+from datetime import datetime
+from sqlalchemy import String, Integer, DateTime, Boolean, ForeignKey, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database import Base
+
+
+class Account(Base):
+    """
+    Модель Telegram аккаунта.
+    
+    Attributes:
+        id: Уникальный идентификатор аккаунта
+        user_id: ID владельца аккаунта
+        phone: Номер телефона (уникальный)
+        api_id: Telegram API ID
+        api_hash: Telegram API Hash
+        session_string: Строка сессии Telethon (зашифрованная)
+        name: Имя аккаунта (опционально)
+        is_connected: Статус подключения
+        last_activity: Время последней активности
+        created_at: Дата добавления
+        updated_at: Дата последнего обновления
+        owner: Связь с пользователем
+    """
+    
+    __tablename__ = "accounts"
+    
+    # Primary key
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    
+    # Foreign key
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    
+    # Telegram данные
+    phone: Mapped[str] = mapped_column(
+        String(20),
+        unique=True,
+        index=True,
+        nullable=False
+    )
+    api_id: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+    api_hash: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False
+    )
+    session_string: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True
+    )
+    
+    # Метаданные
+    name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True
+    )
+    is_connected: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
+    last_activity: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True
+    )
+    
+    # Временные метки
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False
+    )
+    
+    # Relationships
+    owner: Mapped["User"] = relationship(
+        "User",
+        back_populates="accounts",
+        lazy="selectin"
+    )
+    
+    def __repr__(self) -> str:
+        return f"<Account(id={self.id}, phone='{self.phone}', is_connected={self.is_connected})>"

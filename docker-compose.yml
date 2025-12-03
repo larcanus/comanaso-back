@@ -1,0 +1,80 @@
+services:
+  # Python FastAPI сервис для Comanaso
+  comanaso-api:
+    build: .
+    container_name: comanaso-api
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://comanaso:${DB_PASSWORD}@postgres:5432/comanaso
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRATION_HOURS=24
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    volumes:
+      - telegram_sessions:/app/sessions
+      - ./app:/app/app:ro
+    expose:
+      - "8000"
+    networks:
+      - proxy-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: comanaso-postgres
+    environment:
+      - POSTGRES_DB=comanaso
+      - POSTGRES_USER=comanaso
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - proxy-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U comanaso"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Caddy reverse proxy (обновленный)
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - proxy-net
+    restart: unless-stopped
+    depends_on:
+      - comanaso-api
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+  postgres_data:
+    driver: local
+  telegram_sessions:
+    driver: local
+
+networks:
+  proxy-net:
+    driver: bridge

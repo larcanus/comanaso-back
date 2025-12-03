@@ -1,0 +1,19 @@
+# Один домен с путями
+yourdomain.com {
+     # Comanaso API
+     handle /api/* {
+         reverse_proxy comanaso-api:8000
+     }
+
+     # Другие сервисы
+     handle /other/* {
+         reverse_proxy other-service:3000
+     }
+ }
+
+localhost {
+    # Comanaso API
+    handle /api/* {
+         reverse_proxy comanaso-api:8000
+    }
+}

@@ -1,0 +1,23 @@
+# FastAPI и ASGI сервер
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+
+# Telegram клиент
+telethon==1.34.0
+
+# База данных
+sqlalchemy==2.0.25
+asyncpg==0.29.0
+alembic==1.13.1
+
+# Валидация и настройки
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Аутентификация и безопасность
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Утилиты
+python-dotenv==1.0.0
