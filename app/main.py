@@ -143,30 +143,34 @@ async def root():
 )
 async def health_check():
     """
-    Endpoint для проверки работоспособности API.
-    Используется для health checks в Docker и мониторинге.
+    Проверка состояния сервиса и подключения к БД.
+    Возвращает статус healthy/degraded/unhealthy.
     """
-    # Проверка подключения к БД
-    db_status = "healthy"
-    try:
-        async with engine.connect() as conn:
-            await conn.execute("SELECT 1")
-    except Exception as e:
-        logger.error(f"Database health check failed: {e}")
-        db_status = "unhealthy"
-
-    return {
-        "status": "healthy" if db_status == "healthy" else "degraded",
+    health_status = {
+        "status": "healthy",
         "version": settings.version,
         "environment": settings.environment,
-        "database": db_status,
+        "database": "unknown",
         "debug": settings.debug
     }
 
+    # Проверка подключения к БД
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.commit()
+        health_status["database"] = "healthy"
+    except Exception as e:
+        logger.error(f"Database health check failed: {str(e)}")
+        health_status["database"] = "unhealthy"
+        health_status["status"] = "degraded"
+
+    return health_status
+
 
 # Подключение роутеров
-app.include_router(auth.router, prefix="/api")
-app.include_router(accounts.router, prefix="/api")
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(accounts.router, prefix="/api/v1/accounts", tags=["Accounts"])
 
 
 if __name__ == "__main__":
@@ -175,6 +179,5 @@ if __name__ == "__main__":
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=settings.debug,
-        log_level=settings.log_level
+        reload=settings.debug
     )
