@@ -2,12 +2,11 @@
 API роутер для управления Telegram аккаунтами.
 CRUD операции с аккаунтами пользователя.
 """
+from typing import Annotated
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-from typing import List
 
 from app.database import get_db
-from app.schemas.auth import UserResponse
 from app.schemas.account import (
     AccountCreate,
     AccountUpdate,
@@ -16,7 +15,7 @@ from app.schemas.account import (
     AccountListResponse
 )
 from app.services.account_service import AccountService
-from app.routers.auth import get_current_user
+from app.api.dependencies import CurrentUser
 
 router = APIRouter(
     prefix="/accounts",
@@ -32,8 +31,8 @@ router = APIRouter(
 )
 def create_account(
     account_data: AccountCreate,
-    current_user: UserResponse = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)]
 ):
     """
     Создание нового Telegram аккаунта.
@@ -61,8 +60,8 @@ def create_account(
 def get_accounts(
     skip: int = 0,
     limit: int = 100,
-    current_user: UserResponse = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: CurrentUser = None,
+    db: Annotated[Session, Depends(get_db)] = None
 ):
     """
     Получение списка всех Telegram аккаунтов текущего пользователя.
@@ -92,8 +91,8 @@ def get_accounts(
 )
 def get_account(
     account_id: int,
-    current_user: UserResponse = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)]
 ):
     """
     Получение детальной информации о Telegram аккаунте.
@@ -119,8 +118,8 @@ def get_account(
 def update_account(
     account_id: int,
     account_data: AccountUpdate,
-    current_user: UserResponse = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)]
 ):
     """
     Обновление данных Telegram аккаунта.
@@ -149,8 +148,8 @@ def update_account(
 )
 def delete_account(
     account_id: int,
-    current_user: UserResponse = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)]
 ):
     """
     Удаление Telegram аккаунта.
@@ -166,7 +165,3 @@ def delete_account(
         user_id=current_user.id
     )
     return None
-
-
-# Экспорт роутера
-__all__ = ["router"]

@@ -9,10 +9,12 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
 import logging
-import time
 
 from app.config import settings
-from app.database import engine, Base, init_db, close_db
+from app.database import engine, Base, init_db
+
+# Импорт роутеров
+from app.api.routes import auth, accounts
 
 # Настройка логирования
 logging.basicConfig(
@@ -30,6 +32,7 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("Starting Comanaso API...")
+    logger.info(f"Environment: {settings.environment}")
     logger.info(f"Debug mode: {settings.debug}")
     logger.info(f"CORS origins: {settings.cors_origins}")
 
@@ -37,8 +40,7 @@ async def lifespan(app: FastAPI):
         await init_db()
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        logger.info("✅ Database initialized successfully")
-        logger.info("✅ Database tables created")
+        logger.info("✅ Database tables created/verified")
     except Exception as e:
         logger.error(f"❌ Failed to initialize database: {e}")
         raise
@@ -47,15 +49,15 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down Comanaso API...")
-    await close_db()
-    logger.info("Database connections closed")
+    await engine.dispose()
+    logger.info("✅ Database connections closed")
 
 
 # Создание FastAPI приложения
 app = FastAPI(
-    title=settings.project_name,
+    title=settings.app_name,
     version=settings.version,
-    description="Backend API для управления Telegram аккаунтами",
+    description="Backend API для управления Telegram аккаунтами и автоматизации",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -73,37 +75,16 @@ app.add_middleware(
 )
 
 
-# Request timing middleware
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    """Добавляет заголовок с временем обработки запроса."""
-    start_time = time.time()
-    response = await call_next(request)
-    process_time = time.time() - start_time
-    response.headers["X-Process-Time"] = str(process_time)
-    return response
-
-
-# Logging middleware
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """Логирование всех HTTP запросов."""
-    logger.info(f"{request.method} {request.url.path}")
-    response = await call_next(request)
-    logger.info(f"Status: {response.status_code}")
-    return response
-
-
 # Exception handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Обработчик ошибок валидации Pydantic."""
-    logger.warning(f"Validation error: {exc.errors()}")
+    logger.warning(f"Validation error on {request.url.path}: {exc.errors()}")
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "detail": exc.errors(),
-            "body": exc.body
+            "body": str(exc.body) if exc.body else None
         }
     )
 
@@ -111,7 +92,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     """Обработчик ошибок базы данных."""
-    logger.error(f"Database error: {str(exc)}")
+    logger.error(f"Database error on {request.url.path}: {str(exc)}")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -124,7 +105,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """Обработчик всех остальных исключений."""
-    logger.error(f"Unexpected error: {str(exc)}", exc_info=True)
+    logger.error(f"Unexpected error on {request.url.path}: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -134,45 +115,58 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Health check endpoint
-@app.get(
-    "/health",
-    tags=["Health"],
-    summary="Health check",
-    description="Проверка работоспособности API"
-)
-async def health_check():
-    """
-    Endpoint для проверки работоспособности API.
-    Используется для health checks в Docker и мониторинге.
-    """
-    return {
-        "status": "healthy",
-        "version": settings.version,
-        "environment": settings.environment
-    }
-
-
 # Root endpoint
 @app.get(
     "/",
     tags=["Root"],
     summary="Root endpoint",
-    description="Корневой endpoint API"
+    description="Корневой endpoint с информацией об API"
 )
 async def root():
     """Корневой endpoint с информацией об API."""
     return {
         "message": "Comanaso API",
         "version": settings.version,
+        "environment": settings.environment,
         "docs": "/docs",
         "redoc": "/redoc",
         "health": "/health"
     }
 
 
+# Health check endpoint
+@app.get(
+    "/health",
+    tags=["Health"],
+    summary="Health check",
+    description="Проверка работоспособности API и подключения к БД"
+)
+async def health_check():
+    """
+    Endpoint для проверки работоспособности API.
+    Используется для health checks в Docker и мониторинге.
+    """
+    # Проверка подключения к БД
+    db_status = "healthy"
+    try:
+        async with engine.connect() as conn:
+            await conn.execute("SELECT 1")
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        db_status = "unhealthy"
+
+    return {
+        "status": "healthy" if db_status == "healthy" else "degraded",
+        "version": settings.version,
+        "environment": settings.environment,
+        "database": db_status,
+        "debug": settings.debug
+    }
+
+
 # Подключение роутеров
-# app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(auth.router, prefix="/api")
+app.include_router(accounts.router, prefix="/api")
 
 
 if __name__ == "__main__":
