@@ -8,7 +8,7 @@ from app.services.auth_service import AuthService
 from app.api.dependencies import CurrentUser
 
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(tags=["Authentication"])
 
 
 @router.post(
@@ -24,7 +24,7 @@ def register(
 ) -> UserResponse:
     """
     Регистрация нового пользователя.
-    
+
     - **email**: Уникальный email пользователя
     - **password**: Пароль (минимум 8 символов)
     - **full_name**: Полное имя пользователя (опционально)
@@ -44,10 +44,10 @@ def login(
 ) -> Token:
     """
     Авторизация пользователя.
-    
+
     - **email**: Email пользователя
     - **password**: Пароль
-    
+
     Возвращает JWT токен, который нужно передавать в заголовке:
     `Authorization: Bearer <token>`
     """
@@ -63,7 +63,7 @@ def login(
 def get_current_user_info(current_user: CurrentUser) -> UserResponse:
     """
     Получение информации о текущем пользователе.
-    
+
     Требует JWT токен в заголовке Authorization.
     """
     return UserResponse.model_validate(current_user)

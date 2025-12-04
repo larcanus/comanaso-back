@@ -81,10 +81,29 @@ app.add_middleware(
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Обработчик ошибок валидации Pydantic."""
     logger.warning(f"Validation error on {request.url.path}: {exc.errors()}")
+
+    # Преобразуем ошибки в сериализуемый формат
+    errors = []
+    for error in exc.errors():
+        error_dict = {
+            "type": error.get("type"),
+            "loc": error.get("loc"),
+            "msg": error.get("msg"),
+            "input": error.get("input")
+        }
+        # Преобразуем ctx, если есть ValueError
+        if "ctx" in error and "error" in error["ctx"]:
+            ctx_error = error["ctx"]["error"]
+            if isinstance(ctx_error, ValueError):
+                error_dict["ctx"] = {"error": str(ctx_error)}
+            else:
+                error_dict["ctx"] = error["ctx"]
+        errors.append(error_dict)
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
-            "detail": exc.errors(),
+            "detail": errors,
             "body": str(exc.body) if exc.body else None
         }
     )
@@ -170,8 +189,8 @@ async def health_check():
 
 
 # Подключение роутеров
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(accounts.router, prefix="/api/v1/accounts", tags=["Accounts"])
+app.include_router(auth.router, prefix="/api/auth")
+app.include_router(accounts.router, prefix="/api/accounts")
 
 
 if __name__ == "__main__":

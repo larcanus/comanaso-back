@@ -19,8 +19,8 @@ function Test-Register {
     Write-Info "`n=== TEST: Register User ==="
     $body = @{
         email = "test@example.com"
-        password = "password123"
-        full_name = "Test User"
+        password = "Password123"
+        username = "TestUser"
     } | ConvertTo-Json
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
@@ -39,7 +39,7 @@ function Test-Login {
     Write-Info "`n=== TEST: Login User ==="
     $body = @{
         email = "test@example.com"
-        password = "password123"
+        password = "Password123"
     } | ConvertTo-Json
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
@@ -93,8 +93,8 @@ function Test-DuplicateEmail {
     Write-Info "`n=== TEST: Duplicate Email ==="
     $body = @{
         email = "test@example.com"
-        password = "password123"
-        full_name = "Another User"
+        password = "Password123"
+        username = "AnotherUser"
     } | ConvertTo-Json
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
