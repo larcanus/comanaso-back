@@ -57,7 +57,7 @@ function Test-Login {
         $response = Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
         Write-Success "✓ Login successful"
         Show-Response $response $statusCode
-        return $response.access_token
+        return $response.token
     }
     catch {
         Write-Error "✗ Login failed"
@@ -82,6 +82,74 @@ function Test-GetMe {
         Write-Error "✗ Get user info failed"
         Write-Host $_.Exception.Message
         return $null
+    }
+}
+
+function Test-VerifyToken {
+    param($Token)
+    Write-Info "`n=== TEST: Verify Valid Token ==="
+    if (-not $Token) { Write-Error "✗ No token provided"; return $null }
+
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer $Token"
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/verify" -Method Get -Headers $authHeaders -StatusCodeVariable statusCode
+        Write-Success "✓ Token verification successful"
+        Show-Response $response $statusCode
+
+        # Проверка структуры ответа
+        if ($response.valid -eq $true -and $response.user.id -and $response.user.login) {
+            Write-Success "✓ Response structure is correct"
+        } else {
+            Write-Error "✗ Response structure is incorrect"
+        }
+
+        return $response
+    }
+    catch {
+        Write-Error "✗ Token verification failed"
+        Write-Host $_.Exception.Message
+        return $null
+    }
+}
+
+function Test-VerifyInvalidToken {
+    Write-Info "`n=== TEST: Verify Invalid Token ==="
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer invalid_token_xyz123"
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/verify" -Method Get -Headers $authHeaders -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected invalid token"
+        $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Info "Error response:"
+        $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+        # Проверка структуры ошибки
+        if ($errorDetails.detail.error -eq "INVALID_TOKEN") {
+            Write-Success "✓ Error structure is correct"
+        } else {
+            Write-Error "✗ Error structure is incorrect"
+        }
+    }
+}
+
+function Test-VerifyWithoutToken {
+    Write-Info "`n=== TEST: Verify Without Token ==="
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/verify" -Method Get -Headers $HEADERS -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected request without token"
+        Write-Host "Error: $($_.Exception.Message)"
     }
 }
 
@@ -143,10 +211,19 @@ function Run-AllTests {
     # Основные тесты
     $user = Test-Register; Start-Sleep -Seconds 1
     $token = Test-Login; Start-Sleep -Seconds 1
-    if ($token) { Test-GetMe -Token $token; Start-Sleep -Seconds 1 }
+
+    # Тесты с валидным токеном
+    if ($token) {
+        Test-GetMe -Token $token; Start-Sleep -Seconds 1
+        Test-VerifyToken -Token $token; Start-Sleep -Seconds 1
+    }
+
+    # Негативные тесты
     Test-InvalidLogin; Start-Sleep -Seconds 1
     Test-DuplicateLogin; Start-Sleep -Seconds 1
-    Test-InvalidToken
+    Test-InvalidToken; Start-Sleep -Seconds 1
+    Test-VerifyInvalidToken; Start-Sleep -Seconds 1
+    Test-VerifyWithoutToken
 
     Write-Host "`n╔════════════════════════════════════════╗" -ForegroundColor Yellow
     Write-Host "║   TESTS COMPLETED                      ║" -ForegroundColor Yellow
@@ -159,10 +236,13 @@ function Show-Menu {
     Write-Host "2. Test Register"
     Write-Host "3. Test Login"
     Write-Host "4. Test Get Me (requires token)"
-    Write-Host "5. Test Invalid Login"
-    Write-Host "6. Test Duplicate Login"
-    Write-Host "7. Test Invalid Token"
-    Write-Host "8. Cleanup Test Users"
+    Write-Host "5. Test Verify Token (requires token)"
+    Write-Host "6. Test Verify Invalid Token"
+    Write-Host "7. Test Verify Without Token"
+    Write-Host "8. Test Invalid Login"
+    Write-Host "9. Test Duplicate Login"
+    Write-Host "10. Test Invalid Token"
+    Write-Host "11. Cleanup Test Users"
     Write-Host "0. Exit"
     Write-Host ""
 }
@@ -177,10 +257,13 @@ if ($args.Count -eq 0) {
             "2" { Test-Register }
             "3" { $token = Test-Login }
             "4" { if (-not $token) { $token = Read-Host "Enter token" }; Test-GetMe -Token $token }
-            "5" { Test-InvalidLogin }
-            "6" { Test-DuplicateLogin }
-            "7" { Test-InvalidToken }
-            "8" { Cleanup-TestUsers }
+            "5" { if (-not $token) { $token = Read-Host "Enter token" }; Test-VerifyToken -Token $token }
+            "6" { Test-VerifyInvalidToken }
+            "7" { Test-VerifyWithoutToken }
+            "8" { Test-InvalidLogin }
+            "9" { Test-DuplicateLogin }
+            "10" { Test-InvalidToken }
+            "11" { Cleanup-TestUsers }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
         }
