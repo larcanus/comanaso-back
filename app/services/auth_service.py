@@ -3,11 +3,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, or_
 from fastapi import HTTPException, status
 import re
+import logging
 
 from app.models.user import User
 from app.schemas.auth import UserRegister, UserLogin, Token, UserResponse
 from app.utils.security import hash_password, verify_password
 from app.utils.jwt import create_access_token
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -34,21 +37,22 @@ class AuthService:
         Raises:
             HTTPException: Если login уже занят
         """
-        login = user_data.login
+        login = user_data.login.lower().strip()
         is_email = AuthService._is_email(login)
+
+        logger.info(f"Attempting to register user with login: {login} (is_email: {is_email})")
 
         # Проверка существования пользователя
         if is_email:
-            # Если это email, проверяем по email
             stmt = select(User).where(User.email == login)
         else:
-            # Если это username, проверяем по username
             stmt = select(User).where(User.username == login)
 
         result = await db.execute(stmt)
         existing_user = result.scalar_one_or_none()
 
         if existing_user:
+            logger.warning(f"User with login {login} already exists")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Login already registered"
@@ -56,18 +60,19 @@ class AuthService:
 
         # Хеширование пароля
         hashed_password = hash_password(user_data.password)
+        logger.debug(f"Password hashed successfully")
 
         # Создание пользователя
         if is_email:
             new_user = User(
                 email=login,
-                username=login.split('@')[0],  # Используем часть до @ как username
+                username=login.split('@')[0],
                 hashed_password=hashed_password
             )
         else:
             new_user = User(
                 username=login,
-                email=None,  # Email опционален
+                email=None,
                 hashed_password=hashed_password
             )
 
@@ -75,8 +80,10 @@ class AuthService:
             db.add(new_user)
             await db.commit()
             await db.refresh(new_user)
-        except IntegrityError:
+            logger.info(f"User registered successfully: {new_user.id}")
+        except IntegrityError as e:
             await db.rollback()
+            logger.error(f"IntegrityError during registration: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Login already registered"
@@ -99,7 +106,9 @@ class AuthService:
         Raises:
             HTTPException: Если credentials неверные
         """
-        login = credentials.login
+        login = credentials.login.lower().strip()
+
+        logger.info(f"Attempting to authenticate user: {login}")
 
         # Поиск пользователя по username или email
         stmt = select(User).where(
@@ -111,13 +120,28 @@ class AuthService:
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
 
-        # Проверка пароля
-        if not user or not verify_password(credentials.password, user.hashed_password):
+        if not user:
+            logger.warning(f"User not found: {login}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect login or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        logger.debug(f"User found: {user.id}, verifying password...")
+
+        # Проверка пароля
+        password_valid = verify_password(credentials.password, user.hashed_password)
+
+        if not password_valid:
+            logger.warning(f"Invalid password for user: {login}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect login or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        logger.info(f"User authenticated successfully: {user.id}")
 
         # Создание токена
         access_token = create_access_token(

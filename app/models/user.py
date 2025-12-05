@@ -5,7 +5,7 @@ SQLAlchemy модель пользователя.
 from datetime import datetime
 from sqlalchemy import String, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import List
+from typing import List, Optional
 
 from app.database import Base
 
@@ -13,10 +13,10 @@ from app.database import Base
 class User(Base):
     """
     Модель пользователя системы.
-    
+
     Attributes:
         id: Уникальный идентификатор пользователя
-        email: Email пользователя (уникальный)
+        email: Email пользователя (уникальный, опциональный)
         username: Имя пользователя (уникальное)
         hashed_password: Хешированный пароль
         is_active: Активен ли пользователь
@@ -25,18 +25,18 @@ class User(Base):
         updated_at: Дата последнего обновления
         accounts: Связанные Telegram аккаунты
     """
-    
+
     __tablename__ = "users"
-    
+
     # Primary key
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    
+
     # Учетные данные
-    email: Mapped[str] = mapped_column(
+    email: Mapped[Optional[str]] = mapped_column(
         String(255),
         unique=True,
         index=True,
-        nullable=False
+        nullable=True  # Email теперь опционален
     )
     username: Mapped[str] = mapped_column(
         String(100),
@@ -48,7 +48,7 @@ class User(Base):
         String(255),
         nullable=False
     )
-    
+
     # Статус
     is_active: Mapped[bool] = mapped_column(
         Boolean,
@@ -60,7 +60,7 @@ class User(Base):
         default=False,
         nullable=False
     )
-    
+
     # Временные метки
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -73,7 +73,7 @@ class User(Base):
         onupdate=datetime.utcnow,
         nullable=False
     )
-    
+
     # Relationships
     accounts: Mapped[List["Account"]] = relationship(
         "Account",
@@ -81,6 +81,6 @@ class User(Base):
         cascade="all, delete-orphan",
         lazy="selectin"
     )
-    
+
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
