@@ -15,12 +15,24 @@ function Show-Response {
     $Response | ConvertTo-Json -Depth 10 | Write-Host
 }
 
+function Cleanup-TestUsers {
+    Write-Info "`n=== CLEANUP: Removing test users ==="
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/dev/cleanup/test-users" -Method Delete -Headers $HEADERS -StatusCodeVariable statusCode
+        Write-Success "✓ Cleanup successful"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Error "✗ Cleanup failed (this is OK if no test users exist)"
+        Write-Host $_.Exception.Message
+    }
+}
+
 function Test-Register {
     Write-Info "`n=== TEST: Register User ==="
     $body = @{
-        email = "test@example.com"
+        login = "test@example.com"
         password = "Password123"
-        username = "TestUser"
     } | ConvertTo-Json
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
@@ -38,7 +50,7 @@ function Test-Register {
 function Test-Login {
     Write-Info "`n=== TEST: Login User ==="
     $body = @{
-        email = "test@example.com"
+        login = "test@example.com"
         password = "Password123"
     } | ConvertTo-Json
     try {
@@ -76,7 +88,7 @@ function Test-GetMe {
 function Test-InvalidLogin {
     Write-Info "`n=== TEST: Invalid Login ==="
     $body = @{
-        email = "test@example.com"
+        login = "test@example.com"
         password = "wrongpassword"
     } | ConvertTo-Json
     try {
@@ -89,19 +101,18 @@ function Test-InvalidLogin {
     }
 }
 
-function Test-DuplicateEmail {
-    Write-Info "`n=== TEST: Duplicate Email ==="
+function Test-DuplicateLogin {
+    Write-Info "`n=== TEST: Duplicate Login ==="
     $body = @{
-        email = "test@example.com"
+        login = "test@example.com"
         password = "Password123"
-        username = "AnotherUser"
     } | ConvertTo-Json
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
         Write-Error "✗ Should have failed but succeeded"
     }
     catch {
-        Write-Success "✓ Correctly rejected duplicate email"
+        Write-Success "✓ Correctly rejected duplicate login"
         Write-Host "Error: $($_.Exception.Message)"
     }
 }
@@ -125,11 +136,16 @@ function Run-AllTests {
     Write-Host "║   COMANASO AUTH API TESTS              ║" -ForegroundColor Yellow
     Write-Host "╚════════════════════════════════════════╝`n" -ForegroundColor Yellow
 
+    # Очистка перед тестами
+    Cleanup-TestUsers
+    Start-Sleep -Seconds 1
+
+    # Основные тесты
     $user = Test-Register; Start-Sleep -Seconds 1
     $token = Test-Login; Start-Sleep -Seconds 1
     if ($token) { Test-GetMe -Token $token; Start-Sleep -Seconds 1 }
     Test-InvalidLogin; Start-Sleep -Seconds 1
-    Test-DuplicateEmail; Start-Sleep -Seconds 1
+    Test-DuplicateLogin; Start-Sleep -Seconds 1
     Test-InvalidToken
 
     Write-Host "`n╔════════════════════════════════════════╗" -ForegroundColor Yellow
@@ -144,8 +160,9 @@ function Show-Menu {
     Write-Host "3. Test Login"
     Write-Host "4. Test Get Me (requires token)"
     Write-Host "5. Test Invalid Login"
-    Write-Host "6. Test Duplicate Email"
+    Write-Host "6. Test Duplicate Login"
     Write-Host "7. Test Invalid Token"
+    Write-Host "8. Cleanup Test Users"
     Write-Host "0. Exit"
     Write-Host ""
 }
@@ -161,8 +178,9 @@ if ($args.Count -eq 0) {
             "3" { $token = Test-Login }
             "4" { if (-not $token) { $token = Read-Host "Enter token" }; Test-GetMe -Token $token }
             "5" { Test-InvalidLogin }
-            "6" { Test-DuplicateEmail }
+            "6" { Test-DuplicateLogin }
             "7" { Test-InvalidToken }
+            "8" { Cleanup-TestUsers }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
         }

@@ -1,6 +1,8 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select, or_
 from fastapi import HTTPException, status
+import re
 
 from app.models.user import User
 from app.schemas.auth import UserRegister, UserLogin, Token, UserResponse
@@ -12,59 +14,84 @@ class AuthService:
     """Сервис для работы с аутентификацией пользователей."""
 
     @staticmethod
-    def register_user(db: Session, user_data: UserRegister) -> UserResponse:
+    def _is_email(login: str) -> bool:
+        """Проверка, является ли логин email адресом."""
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return bool(re.match(email_pattern, login))
+
+    @staticmethod
+    async def register_user(db: AsyncSession, user_data: UserRegister) -> UserResponse:
         """
         Регистрация нового пользователя.
 
         Args:
-            db: Сессия базы данных
-            user_data: Данные для регистрации
+            db: Асинхронная сессия базы данных
+            user_data: Данные для регистрации (login и password)
 
         Returns:
             UserResponse: Данные зарегистрированного пользователя
 
         Raises:
-            HTTPException: Если email уже занят
+            HTTPException: Если login уже занят
         """
+        login = user_data.login
+        is_email = AuthService._is_email(login)
+
         # Проверка существования пользователя
-        existing_user = db.query(User).filter(User.email == user_data.email).first()
+        if is_email:
+            # Если это email, проверяем по email
+            stmt = select(User).where(User.email == login)
+        else:
+            # Если это username, проверяем по username
+            stmt = select(User).where(User.username == login)
+
+        result = await db.execute(stmt)
+        existing_user = result.scalar_one_or_none()
+
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Login already registered"
             )
 
         # Хеширование пароля
         hashed_password = hash_password(user_data.password)
 
         # Создание пользователя
-        new_user = User(
-            email=user_data.email,
-            hashed_password=hashed_password,
-            full_name=user_data.full_name
-        )
+        if is_email:
+            new_user = User(
+                email=login,
+                username=login.split('@')[0],  # Используем часть до @ как username
+                hashed_password=hashed_password
+            )
+        else:
+            new_user = User(
+                username=login,
+                email=None,  # Email опционален
+                hashed_password=hashed_password
+            )
 
         try:
             db.add(new_user)
-            db.commit()
-            db.refresh(new_user)
+            await db.commit()
+            await db.refresh(new_user)
         except IntegrityError:
-            db.rollback()
+            await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Login already registered"
             )
 
         return UserResponse.model_validate(new_user)
 
     @staticmethod
-    def authenticate_user(db: Session, credentials: UserLogin) -> Token:
+    async def authenticate_user(db: AsyncSession, credentials: UserLogin) -> Token:
         """
         Аутентификация пользователя и выдача JWT токена.
 
         Args:
-            db: Сессия базы данных
-            credentials: Email и пароль
+            db: Асинхронная сессия базы данных
+            credentials: Login и пароль
 
         Returns:
             Token: JWT токен доступа
@@ -72,29 +99,40 @@ class AuthService:
         Raises:
             HTTPException: Если credentials неверные
         """
-        # Поиск пользователя
-        user = db.query(User).filter(User.email == credentials.email).first()
+        login = credentials.login
+
+        # Поиск пользователя по username или email
+        stmt = select(User).where(
+            or_(
+                User.username == login,
+                User.email == login
+            )
+        )
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
 
         # Проверка пароля
         if not user or not verify_password(credentials.password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password",
+                detail="Incorrect login or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
         # Создание токена
-        access_token = create_access_token(data={"sub": str(user.id)})
+        access_token = create_access_token(
+            data={"sub": str(user.id), "username": user.username}
+        )
 
         return Token(access_token=access_token, token_type="bearer")
 
     @staticmethod
-    def get_user_by_id(db: Session, user_id: int) -> User:
+    async def get_user_by_id(db: AsyncSession, user_id: int) -> User:
         """
         Получение пользователя по ID.
 
         Args:
-            db: Сессия базы данных
+            db: Асинхронная сессия базы данных
             user_id: ID пользователя
 
         Returns:
@@ -103,7 +141,10 @@ class AuthService:
         Raises:
             HTTPException: Если пользователь не найден
         """
-        user = db.query(User).filter(User.id == user_id).first()
+        stmt = select(User).where(User.id == user_id)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

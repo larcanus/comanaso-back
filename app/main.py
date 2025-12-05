@@ -15,7 +15,7 @@ from app.config import settings
 from app.database import engine, Base, init_db
 
 # Импорт роутеров
-from app.api.routes import auth, accounts
+from app.api.routes import auth, accounts, dev
 
 # Настройка логирования
 logging.basicConfig(
@@ -191,6 +191,11 @@ async def health_check():
 # Подключение роутеров
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(accounts.router, prefix="/api/accounts")
+
+# Dev endpoints (только для development окружения)
+if settings.environment == "development":
+    app.include_router(dev.router, prefix="/api/dev")
+    logger.info("✅ Development endpoints enabled at /api/dev")
 
 
 if __name__ == "__main__":

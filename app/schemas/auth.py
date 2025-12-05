@@ -2,31 +2,26 @@
 Pydantic схемы для аутентификации.
 Валидация данных для регистрации, логина и токенов.
 """
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, Field, validator
+from datetime import datetime
 import re
 
 
 class UserRegister(BaseModel):
     """
     Схема для регистрации нового пользователя.
-    
+
     Attributes:
-        email: Email пользователя
-        username: Имя пользователя (3-50 символов, только буквы, цифры, _, -)
+        login: Логин пользователя (email или username, 3-50 символов)
         password: Пароль (минимум 8 символов)
     """
-    
-    email: EmailStr = Field(
-        ...,
-        description="Email пользователя",
-        example="user@example.com"
-    )
-    username: str = Field(
+
+    login: str = Field(
         ...,
         min_length=3,
         max_length=50,
-        description="Имя пользователя",
-        example="john_doe"
+        description="Логин пользователя (email или username)",
+        example="user@example.com"
     )
     password: str = Field(
         ...,
@@ -35,16 +30,12 @@ class UserRegister(BaseModel):
         description="Пароль (минимум 8 символов)",
         example="SecurePass123!"
     )
-    
-    @validator("username")
-    def validate_username(cls, v):
-        """Валидация имени пользователя."""
-        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
-            raise ValueError(
-                "Username can only contain letters, numbers, underscores and hyphens"
-            )
-        return v.lower()
-    
+
+    @validator("login")
+    def validate_login(cls, v):
+        """Валидация логина - приводим к нижнему регистру."""
+        return v.lower().strip()
+
     @validator("password")
     def validate_password(cls, v):
         """Валидация пароля."""
@@ -60,16 +51,16 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     """
     Схема для входа пользователя.
-    
+
     Attributes:
-        username: Имя пользователя или email
+        login: Логин пользователя (email или username)
         password: Пароль
     """
-    
-    username: str = Field(
+
+    login: str = Field(
         ...,
-        description="Имя пользователя или email",
-        example="john_doe"
+        description="Логин пользователя (email или username)",
+        example="user@example.com"
     )
     password: str = Field(
         ...,
@@ -81,12 +72,12 @@ class UserLogin(BaseModel):
 class Token(BaseModel):
     """
     Схема JWT токена.
-    
+
     Attributes:
         access_token: JWT токен доступа
         token_type: Тип токена (всегда "bearer")
     """
-    
+
     access_token: str = Field(
         ...,
         description="JWT токен доступа"
@@ -100,12 +91,12 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     """
     Схема данных из JWT токена.
-    
+
     Attributes:
         user_id: ID пользователя
         username: Имя пользователя
     """
-    
+
     user_id: int | None = None
     username: str | None = None
 
@@ -113,21 +104,21 @@ class TokenData(BaseModel):
 class UserResponse(BaseModel):
     """
     Схема ответа с данными пользователя.
-    
+
     Attributes:
         id: ID пользователя
-        email: Email
+        email: Email (может быть None)
         username: Имя пользователя
         is_active: Активен ли пользователь
         created_at: Дата создания
     """
-    
+
     id: int
-    email: str
+    email: str | None = None
     username: str
     is_active: bool
-    created_at: str
-    
+    created_at: datetime
+
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
