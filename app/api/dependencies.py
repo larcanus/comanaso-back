@@ -38,11 +38,14 @@ async def get_current_user(
     if token_data is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail={
+                "error": "INVALID_TOKEN",
+                "message": "Токен недействителен или истек"
+            },
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Получение пользователя (добавлен await)
+    # Получение пользователя
     user = await AuthService.get_user_by_id(db, int(token_data.user_id))
     return user
 

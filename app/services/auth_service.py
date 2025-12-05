@@ -6,7 +6,10 @@ import re
 import logging
 
 from app.models.user import User
-from app.schemas.auth import UserRegister, UserLogin, Token, UserResponse
+from app.schemas.auth import (
+    UserRegister, UserLogin, AuthResponse, UserData,
+    Token, UserResponse
+)
 from app.utils.security import hash_password, verify_password
 from app.utils.jwt import create_access_token
 
@@ -23,7 +26,7 @@ class AuthService:
         return bool(re.match(email_pattern, login))
 
     @staticmethod
-    async def register_user(db: AsyncSession, user_data: UserRegister) -> UserResponse:
+    async def register_user(db: AsyncSession, user_data: UserRegister) -> AuthResponse:
         """
         Регистрация нового пользователя.
 
@@ -32,7 +35,7 @@ class AuthService:
             user_data: Данные для регистрации (login и password)
 
         Returns:
-            UserResponse: Данные зарегистрированного пользователя
+            AuthResponse: Токен и данные зарегистрированного пользователя
 
         Raises:
             HTTPException: Если login уже занят
@@ -55,7 +58,10 @@ class AuthService:
             logger.warning(f"User with login {login} already exists")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Login already registered"
+                detail={
+                    "error": "USER_EXISTS",
+                    "message": "Пользователь с таким логином уже существует"
+                }
             )
 
         # Хеширование пароля
@@ -86,13 +92,25 @@ class AuthService:
             logger.error(f"IntegrityError during registration: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Login already registered"
+                detail={
+                    "error": "USER_EXISTS",
+                    "message": "Пользователь с таким логином уже существует"
+                }
             )
 
-        return UserResponse.model_validate(new_user)
+        # Создание токена
+        access_token = create_access_token(
+            data={"sub": str(new_user.id), "username": new_user.username}
+        )
+
+        # Формирование ответа
+        return AuthResponse(
+            token=access_token,
+            user=UserData.from_user(new_user)
+        )
 
     @staticmethod
-    async def authenticate_user(db: AsyncSession, credentials: UserLogin) -> Token:
+    async def authenticate_user(db: AsyncSession, credentials: UserLogin) -> AuthResponse:
         """
         Аутентификация пользователя и выдача JWT токена.
 
@@ -101,7 +119,7 @@ class AuthService:
             credentials: Login и пароль
 
         Returns:
-            Token: JWT токен доступа
+            AuthResponse: Токен и данные пользователя
 
         Raises:
             HTTPException: Если credentials неверные
@@ -124,7 +142,10 @@ class AuthService:
             logger.warning(f"User not found: {login}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect login or password",
+                detail={
+                    "error": "INVALID_CREDENTIALS",
+                    "message": "Неверный логин или пароль"
+                },
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -137,7 +158,10 @@ class AuthService:
             logger.warning(f"Invalid password for user: {login}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect login or password",
+                detail={
+                    "error": "INVALID_CREDENTIALS",
+                    "message": "Неверный логин или пароль"
+                },
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -148,7 +172,11 @@ class AuthService:
             data={"sub": str(user.id), "username": user.username}
         )
 
-        return Token(access_token=access_token, token_type="bearer")
+        # Формирование ответа
+        return AuthResponse(
+            token=access_token,
+            user=UserData.from_user(user)
+        )
 
     @staticmethod
     async def get_user_by_id(db: AsyncSession, user_id: int) -> User:
@@ -172,6 +200,10 @@ class AuthService:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                detail={
+                    "error": "USER_NOT_FOUND",
+                    "message": "Пользователь не найден"
+                }
             )
+
         return user

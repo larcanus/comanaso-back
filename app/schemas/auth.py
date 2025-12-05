@@ -13,7 +13,7 @@ class UserRegister(BaseModel):
 
     Attributes:
         login: Логин пользователя (email или username, 3-50 символов)
-        password: Пароль (минимум 8 символов)
+        password: Пароль (минимум 6 символов)
     """
 
     login: str = Field(
@@ -25,27 +25,16 @@ class UserRegister(BaseModel):
     )
     password: str = Field(
         ...,
-        min_length=8,
+        min_length=6,
         max_length=100,
-        description="Пароль (минимум 8 символов)",
-        example="SecurePass123!"
+        description="Пароль (минимум 6 символов)",
+        example="SecurePass123"
     )
 
     @validator("login")
     def validate_login(cls, v):
         """Валидация логина - приводим к нижнему регистру."""
         return v.lower().strip()
-
-    @validator("password")
-    def validate_password(cls, v):
-        """Валидация пароля."""
-        if not any(char.isdigit() for char in v):
-            raise ValueError("Password must contain at least one digit")
-        if not any(char.isupper() for char in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(char.islower() for char in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        return v
 
 
 class UserLogin(BaseModel):
@@ -65,13 +54,118 @@ class UserLogin(BaseModel):
     password: str = Field(
         ...,
         description="Пароль",
-        example="SecurePass123!"
+        example="SecurePass123"
     )
 
 
+class UserData(BaseModel):
+    """
+    Схема данных пользователя для ответов API.
+
+    Attributes:
+        id: ID пользователя
+        login: Логин пользователя
+        createdAt: Дата создания (ISO 8601)
+    """
+
+    id: int
+    login: str
+    createdAt: str
+
+    @classmethod
+    def from_user(cls, user):
+        """Создание из модели User."""
+        login = user.email if user.email else user.username
+        return cls(
+            id=user.id,
+            login=login,
+            createdAt=user.created_at.isoformat() + "Z"
+        )
+
+
+class AuthResponse(BaseModel):
+    """
+    Схема ответа при регистрации/логине.
+
+    Attributes:
+        token: JWT токен доступа
+        user: Данные пользователя
+    """
+
+    token: str = Field(
+        ...,
+        description="JWT токен доступа"
+    )
+    user: UserData = Field(
+        ...,
+        description="Данные пользователя"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "user": {
+                    "id": 1,
+                    "login": "user123",
+                    "createdAt": "2024-01-15T10:30:00Z"
+                }
+            }
+        }
+    }
+
+
+class TokenVerifyResponse(BaseModel):
+    """
+    Схема ответа при проверке токена.
+
+    Attributes:
+        valid: Валидность токена
+        user: Данные пользователя (если токен валиден)
+    """
+
+    valid: bool
+    user: UserData | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "valid": True,
+                "user": {
+                    "id": 1,
+                    "login": "user123"
+                }
+            }
+        }
+    }
+
+
+class ErrorResponse(BaseModel):
+    """
+    Стандартная схема ошибки.
+
+    Attributes:
+        error: Код ошибки
+        message: Описание ошибки
+    """
+
+    error: str
+    message: str
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "error": "VALIDATION_ERROR",
+                "message": "Пароль должен содержать минимум 6 символов"
+            }
+        }
+    }
+
+
+# Старые схемы для обратной совместимости
 class Token(BaseModel):
     """
-    Схема JWT токена.
+    Схема JWT токена (deprecated, используйте AuthResponse).
 
     Attributes:
         access_token: JWT токен доступа
@@ -103,7 +197,7 @@ class TokenData(BaseModel):
 
 class UserResponse(BaseModel):
     """
-    Схема ответа с данными пользователя.
+    Схема ответа с данными пользователя (deprecated, используйте UserData).
 
     Attributes:
         id: ID пользователя
