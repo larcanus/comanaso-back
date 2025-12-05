@@ -1,7 +1,7 @@
 from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
@@ -13,16 +13,16 @@ from app.services.auth_service import AuthService
 security = HTTPBearer()
 
 
-def get_current_user(
+async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)]
 ) -> User:
     """
     Получение текущего аутентифицированного пользователя из JWT токена.
 
     Args:
         credentials: Bearer токен из заголовка Authorization
-        db: Сессия базы данных
+        db: Асинхронная сессия базы данных
 
     Returns:
         User: Текущий пользователь
@@ -42,8 +42,8 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Получение пользователя
-    user = AuthService.get_user_by_id(db, int(token_data.user_id))
+    # Получение пользователя (добавлен await)
+    user = await AuthService.get_user_by_id(db, int(token_data.user_id))
     return user
 
 
