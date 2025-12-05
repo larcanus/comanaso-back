@@ -8,6 +8,48 @@ $HEADERS = @{
 $script:AuthToken = $null
 $script:TestAccountId = $null
 
+# Функция для логина и получения токена
+function Get-AuthToken {
+    Write-TestHeader "Login to get token"
+
+    $loginData = @{
+        login = "test@example.com"
+        password = "test123"
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL$AUTH_ENDPOINT/login" `
+            -Method Post `
+            -Body $loginData `
+            -ContentType "application/json"
+
+        $Global:AuthToken = $response.token
+        Write-Success "Login successful"
+        Write-Host "Token saved for subsequent requests`n"
+
+        # Отладочная информация
+        Write-Host "Status Code: 200"
+        Write-Host "Response:"
+        $response | ConvertTo-Json -Depth 10
+        Write-Host $Global:AuthToken
+
+        return $true
+    }
+    catch {
+        Write-Error "Login failed: $_"
+
+        # Попытка показать детали ошибки
+        if ($_.Exception.Response) {
+            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $responseBody = $reader.ReadToEnd()
+            Write-Host "Error details:" -ForegroundColor $ErrorColor
+            $responseBody | ConvertFrom-Json | ConvertTo-Json -Depth 10
+        }
+
+        return $false
+    }
+}
+
 function Write-Success { Write-Host $args -ForegroundColor Green }
 function Write-Error { Write-Host $args -ForegroundColor Red }
 function Write-Info { Write-Host $args -ForegroundColor Cyan }
@@ -35,7 +77,7 @@ function Test-Login {
         login = "test@example.com"
         password = "Password123"
     } | ConvertTo-Json
-    
+
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
         Write-Success "✓ Login successful"
@@ -56,12 +98,12 @@ function Test-GetAccounts {
     Write-Info "`n=== TEST: Get Accounts List ==="
     $authHeaders = Get-AuthHeaders
     if (-not $authHeaders) { return $null }
-    
+
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Get -Headers $authHeaders -StatusCodeVariable statusCode
         Write-Success "✓ Get accounts successful"
         Show-Response $response $statusCode
-        
+
         # Проверка структуры ответа
         if ($response -is [Array]) {
             Write-Success "✓ Response is an array"
@@ -76,7 +118,7 @@ function Test-GetAccounts {
         } else {
             Write-Success "✓ Empty accounts list"
         }
-        
+
         return $response
     }
     catch {
@@ -90,29 +132,29 @@ function Test-CreateAccount {
     Write-Info "`n=== TEST: Create Account ==="
     $authHeaders = Get-AuthHeaders
     if (-not $authHeaders) { return $null }
-    
+
     $body = @{
         name = "Test Account"
         phoneNumber = "+79991234567"
         apiId = "12345678"
         apiHash = "abcdef1234567890abcdef1234567890"
     } | ConvertTo-Json
-    
+
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Post -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
         Write-Success "✓ Create account successful"
         Show-Response $response $statusCode
-        
+
         # Сохраняем ID для последующих тестов
         $script:TestAccountId = $response.id
-        
+
         # Проверка структуры ответа
         if ($response.id -and $response.name -eq "Test Account" -and $response.phoneNumber -eq "+79991234567" -and $response.status -eq "offline") {
             Write-Success "✓ Account created with correct data"
         } else {
             Write-Error "✗ Account data is incorrect"
         }
-        
+
         return $response
     }
     catch {
@@ -131,14 +173,14 @@ function Test-CreateDuplicateAccount {
     Write-Info "`n=== TEST: Create Duplicate Account ==="
     $authHeaders = Get-AuthHeaders
     if (-not $authHeaders) { return }
-    
+
     $body = @{
         name = "Duplicate Account"
         phoneNumber = "+79991234567"
         apiId = "12345678"
         apiHash = "abcdef1234567890abcdef1234567890"
     } | ConvertTo-Json
-    
+
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Post -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
         Write-Error "✗ Should have failed but succeeded"
@@ -150,7 +192,7 @@ function Test-CreateDuplicateAccount {
             $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
-            
+
             if ($errorDetails.detail.error -eq "ACCOUNT_EXISTS") {
                 Write-Success "✓ Error code is correct (ACCOUNT_EXISTS)"
             } else {
@@ -164,14 +206,14 @@ function Test-CreateAccountInvalidPhone {
     Write-Info "`n=== TEST: Create Account with Invalid Phone ==="
     $authHeaders = Get-AuthHeaders
     if (-not $authHeaders) { return }
-    
+
     $body = @{
         name = "Invalid Phone Account"
         phoneNumber = "invalid_phone"
         apiId = "12345678"
         apiHash = "abcdef1234567890abcdef1234567890"
     } | ConvertTo-Json
-    
+
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Post -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
         Write-Error "✗ Should have failed but succeeded"
@@ -183,7 +225,7 @@ function Test-CreateAccountInvalidPhone {
             $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
-            
+
             if ($errorDetails.detail.error -eq "VALIDATION_ERROR") {
                 Write-Success "✓ Error code is correct (VALIDATION_ERROR)"
             } else {
@@ -197,30 +239,30 @@ function Test-UpdateAccount {
     Write-Info "`n=== TEST: Update Account ==="
     $authHeaders = Get-AuthHeaders
     if (-not $authHeaders) { return $null }
-    
+
     if (-not $script:TestAccountId) {
         Write-Error "✗ No test account ID. Create account first"
         return $null
     }
-    
+
     $body = @{
         name = "Updated Test Account"
         apiId = "87654321"
         apiHash = "new_hash_1234567890abcdef1234567890ab"
     } | ConvertTo-Json
-    
+
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
         Write-Success "✓ Update account successful"
         Show-Response $response $statusCode
-        
+
         # Проверка обновленных данных
         if ($response.name -eq "Updated Test Account" -and $response.apiId -eq "87654321") {
             Write-Success "✓ Account updated with correct data"
         } else {
             Write-Error "✗ Account data is incorrect"
         }
-        
+
         return $response
     }
     catch {
@@ -239,11 +281,11 @@ function Test-UpdateNonExistentAccount {
     Write-Info "`n=== TEST: Update Non-Existent Account ==="
     $authHeaders = Get-AuthHeaders
     if (-not $authHeaders) { return }
-    
+
     $body = @{
         name = "Should Not Work"
     } | ConvertTo-Json
-    
+
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/accounts/99999" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
         Write-Error "✗ Should have failed but succeeded"
@@ -255,7 +297,7 @@ function Test-UpdateNonExistentAccount {
             $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
-            
+
             if ($errorDetails.detail.error -eq "ACCOUNT_NOT_FOUND") {
                 Write-Success "✓ Error code is correct (ACCOUNT_NOT_FOUND)"
             } else {
@@ -269,23 +311,23 @@ function Test-DeleteAccount {
     Write-Info "`n=== TEST: Delete Account ==="
     $authHeaders = Get-AuthHeaders
     if (-not $authHeaders) { return }
-    
+
     if (-not $script:TestAccountId) {
         Write-Error "✗ No test account ID. Create account first"
         return
     }
-    
+
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId" -Method Delete -Headers $authHeaders -StatusCodeVariable statusCode
         Write-Success "✓ Delete account successful"
         Write-Info "Status Code: $statusCode"
-        
+
         if ($statusCode -eq 204) {
             Write-Success "✓ Correct status code (204 No Content)"
         } else {
             Write-Error "✗ Incorrect status code (expected 204)"
         }
-        
+
         $script:TestAccountId = $null
     }
     catch {
@@ -303,7 +345,7 @@ function Test-DeleteNonExistentAccount {
     Write-Info "`n=== TEST: Delete Non-Existent Account ==="
     $authHeaders = Get-AuthHeaders
     if (-not $authHeaders) { return }
-    
+
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/accounts/99999" -Method Delete -Headers $authHeaders -StatusCodeVariable statusCode
         Write-Error "✗ Should have failed but succeeded"
@@ -315,7 +357,7 @@ function Test-DeleteNonExistentAccount {
             $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
-            
+
             if ($errorDetails.detail.error -eq "ACCOUNT_NOT_FOUND") {
                 Write-Success "✓ Error code is correct (ACCOUNT_NOT_FOUND)"
             } else {
@@ -332,7 +374,7 @@ function Run-AllTests {
 
     # Логин для получения токена
     Test-Login; Start-Sleep -Seconds 1
-    
+
     if (-not $script:AuthToken) {
         Write-Error "Cannot proceed without auth token"
         return
@@ -342,19 +384,19 @@ function Run-AllTests {
     Test-GetAccounts; Start-Sleep -Seconds 1
     Test-CreateAccount; Start-Sleep -Seconds 1
     Test-GetAccounts; Start-Sleep -Seconds 1
-    
+
     # Негативные тесты создания
     Test-CreateDuplicateAccount; Start-Sleep -Seconds 1
     Test-CreateAccountInvalidPhone; Start-Sleep -Seconds 1
-    
+
     # Тесты обновления
     Test-UpdateAccount; Start-Sleep -Seconds 1
     Test-UpdateNonExistentAccount; Start-Sleep -Seconds 1
-    
+
     # Тесты удаления
     Test-DeleteAccount; Start-Sleep -Seconds 1
     Test-DeleteNonExistentAccount; Start-Sleep -Seconds 1
-    
+
     # Проверка что аккаунт удален
     Test-GetAccounts
 

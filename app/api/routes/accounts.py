@@ -4,7 +4,7 @@ CRUD операции с аккаунтами пользователя.
 """
 from typing import Annotated
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.account import (
@@ -18,7 +18,6 @@ from app.services.account_service import AccountService
 from app.api.dependencies import CurrentUser
 
 router = APIRouter(
-    prefix="/accounts",
     tags=["accounts"]
 )
 
@@ -29,22 +28,22 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
     summary="Создать новый Telegram аккаунт"
 )
-def create_account(
+async def create_account(
     account_data: AccountCreate,
     current_user: CurrentUser,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Создание нового Telegram аккаунта.
-    
+
     - **phone**: Номер телефона в международном формате
     - **api_id**: Telegram API ID (получить на my.telegram.org)
     - **api_hash**: Telegram API Hash
     - **name**: Имя аккаунта (опционально)
-    
+
     Возвращает созданный аккаунт с ID.
     """
-    account = AccountService.create_account(
+    account = await AccountService.create_account(
         db=db,
         user_id=current_user.id,
         account_data=account_data
@@ -57,27 +56,27 @@ def create_account(
     response_model=AccountListResponse,
     summary="Получить список всех аккаунтов"
 )
-def get_accounts(
+async def get_accounts(
     skip: int = 0,
     limit: int = 100,
     current_user: CurrentUser = None,
-    db: Annotated[Session, Depends(get_db)] = None
+    db: Annotated[AsyncSession, Depends(get_db)] = None
 ):
     """
     Получение списка всех Telegram аккаунтов текущего пользователя.
-    
+
     - **skip**: Количество пропускаемых записей (для пагинации)
     - **limit**: Максимальное количество записей
-    
+
     Возвращает список аккаунтов с основной информацией.
     """
-    accounts = AccountService.get_user_accounts(
+    accounts = await AccountService.get_user_accounts(
         db=db,
         user_id=current_user.id,
         skip=skip,
         limit=limit
     )
-    
+
     return AccountListResponse(
         accounts=[AccountResponse.model_validate(acc) for acc in accounts],
         total=len(accounts)
@@ -89,20 +88,20 @@ def get_accounts(
     response_model=AccountDetailResponse,
     summary="Получить аккаунт по ID"
 )
-def get_account(
+async def get_account(
     account_id: int,
     current_user: CurrentUser,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Получение детальной информации о Telegram аккаунте.
-    
+
     - **account_id**: ID аккаунта
-    
+
     Возвращает полную информацию об аккаунте.
     Доступ только для владельца аккаунта.
     """
-    account = AccountService.get_account(
+    account = await AccountService.get_account(
         db=db,
         account_id=account_id,
         user_id=current_user.id
@@ -115,24 +114,24 @@ def get_account(
     response_model=AccountDetailResponse,
     summary="Обновить данные аккаунта"
 )
-def update_account(
+async def update_account(
     account_id: int,
     account_data: AccountUpdate,
     current_user: CurrentUser,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Обновление данных Telegram аккаунта.
-    
+
     - **account_id**: ID аккаунта
     - **name**: Новое имя аккаунта (опционально)
     - **api_id**: Новый API ID (опционально)
     - **api_hash**: Новый API Hash (опционально)
-    
+
     Возвращает обновленный аккаунт.
     Доступ только для владельца аккаунта.
     """
-    account = AccountService.update_account(
+    account = await AccountService.update_account(
         db=db,
         account_id=account_id,
         user_id=current_user.id,
@@ -146,20 +145,20 @@ def update_account(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Удалить аккаунт"
 )
-def delete_account(
+async def delete_account(
     account_id: int,
     current_user: CurrentUser,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Удаление Telegram аккаунта.
-    
+
     - **account_id**: ID аккаунта
-    
+
     Удаляет аккаунт и все связанные данные.
     Доступ только для владельца аккаунта.
     """
-    AccountService.delete_account(
+    await AccountService.delete_account(
         db=db,
         account_id=account_id,
         user_id=current_user.id
