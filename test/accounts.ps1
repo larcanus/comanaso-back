@@ -254,10 +254,20 @@ function Test-CreateDuplicateAccount {
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
 
-            if ($errorDetails.detail -like "*уже существует*") {
-                Write-Success "✓ Error message is correct"
+            if ($errorDetails.error -eq "ACCOUNT_ALREADY_EXISTS") {
+                Write-Success "✓ Error code is correct (ACCOUNT_ALREADY_EXISTS)"
+
+                if ($errorDetails.message -like "*уже существует*") {
+                    Write-Success "✓ Error message is correct"
+                } else {
+                    Write-Error "✗ Error message is incorrect"
+                    Write-Info "Expected message about account already exists"
+                    Write-Info "Got: $($errorDetails.message)"
+                }
             } else {
-                Write-Error "✗ Error message is incorrect"
+                Write-Error "✗ Error code is incorrect"
+                Write-Info "Expected: ACCOUNT_ALREADY_EXISTS"
+                Write-Info "Got: $($errorDetails.error)"
             }
         }
     }
@@ -373,10 +383,20 @@ function Test-UpdateNonExistentAccount {
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
 
-            if ($errorDetails.detail -like "*не найден*") {
-                Write-Success "✓ Error message is correct"
+            if ($errorDetails.error -eq "ACCOUNT_NOT_FOUND") {
+                Write-Success "✓ Error code is correct (ACCOUNT_NOT_FOUND)"
+
+                if ($errorDetails.message -like "*не найден*") {
+                    Write-Success "✓ Error message is correct"
+                } else {
+                    Write-Error "✗ Error message is incorrect"
+                    Write-Info "Expected message about account not found"
+                    Write-Info "Got: $($errorDetails.message)"
+                }
             } else {
-                Write-Error "✗ Error message is incorrect"
+                Write-Error "✗ Error code is incorrect"
+                Write-Info "Expected: ACCOUNT_NOT_FOUND"
+                Write-Info "Got: $($errorDetails.error)"
             }
         }
     }
@@ -433,10 +453,20 @@ function Test-DeleteNonExistentAccount {
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
 
-            if ($errorDetails.detail -like "*не найден*") {
-                Write-Success "✓ Error message is correct"
+            if ($errorDetails.error -eq "ACCOUNT_NOT_FOUND") {
+                Write-Success "✓ Error code is correct (ACCOUNT_NOT_FOUND)"
+
+                if ($errorDetails.message -like "*не найден*") {
+                    Write-Success "✓ Error message is correct"
+                } else {
+                    Write-Error "✗ Error message is incorrect"
+                    Write-Info "Expected message about account not found"
+                    Write-Info "Got: $($errorDetails.message)"
+                }
             } else {
-                Write-Error "✗ Error message is incorrect"
+                Write-Error "✗ Error code is incorrect"
+                Write-Info "Expected: ACCOUNT_NOT_FOUND"
+                Write-Info "Got: $($errorDetails.error)"
             }
         }
     }

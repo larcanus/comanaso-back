@@ -55,7 +55,10 @@ class AccountService:
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Аккаунт с номером {account_data.phone} уже существует"
+                detail={
+                    "error": "ACCOUNT_ALREADY_EXISTS",
+                    "message": f"Аккаунт с номером {account_data.phone} уже существует"
+                }
             )
 
         # Создание аккаунта
@@ -77,7 +80,10 @@ class AccountService:
             await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ошибка при создании аккаунта"
+                detail={
+                    "error": "DATABASE_ERROR",
+                    "message": "Ошибка при создании аккаунта"
+                }
             )
 
     @staticmethod
@@ -111,7 +117,10 @@ class AccountService:
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Аккаунт не найден"
+                detail={
+                    "error": "ACCOUNT_NOT_FOUND",
+                    "message": "Аккаунт не найден"
+                }
             )
 
         return account
@@ -175,13 +184,16 @@ class AccountService:
 
         try:
             await db.commit()
-            await db.refresh(account)  # ДОБАВЛЕНО: обновляем объект из БД
+            await db.refresh(account)
             return account
         except IntegrityError:
             await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Ошибка при обновлении аккаунта"
+                detail={
+                    "error": "DATABASE_ERROR",
+                    "message": "Ошибка при обновлении аккаунта"
+                }
             )
 
     @staticmethod
@@ -231,7 +243,10 @@ class AccountService:
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Аккаунт не найден"
+                detail={
+                    "error": "ACCOUNT_NOT_FOUND",
+                    "message": "Аккаунт не найден"
+                }
             )
 
         account.is_connected = is_connected
@@ -266,7 +281,10 @@ class AccountService:
         if not account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Аккаунт не найден"
+                detail={
+                    "error": "ACCOUNT_NOT_FOUND",
+                    "message": "Аккаунт не найден"
+                }
             )
 
         account.session_string = session_string
