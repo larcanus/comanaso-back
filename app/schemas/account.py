@@ -3,7 +3,7 @@ Pydantic схемы для работы с Telegram аккаунтами.
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, computed_field
 import re
 
 

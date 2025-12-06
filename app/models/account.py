@@ -12,7 +12,7 @@ from app.database import Base
 class Account(Base):
     """
     Модель Telegram аккаунта.
-    
+
     Attributes:
         id: Уникальный идентификатор аккаунта
         user_id: ID владельца аккаунта
@@ -27,12 +27,12 @@ class Account(Base):
         updated_at: Дата последнего обновления
         owner: Связь с пользователем
     """
-    
+
     __tablename__ = "accounts"
-    
+
     # Primary key
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    
+
     # Foreign key
     user_id: Mapped[int] = mapped_column(
         Integer,
@@ -40,7 +40,7 @@ class Account(Base):
         nullable=False,
         index=True
     )
-    
+
     # Telegram данные
     phone: Mapped[str] = mapped_column(
         String(20),
@@ -60,7 +60,7 @@ class Account(Base):
         Text,
         nullable=True
     )
-    
+
     # Метаданные
     name: Mapped[str | None] = mapped_column(
         String(100),
@@ -75,7 +75,7 @@ class Account(Base):
         DateTime,
         nullable=True
     )
-    
+
     # Временные метки
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -88,13 +88,27 @@ class Account(Base):
         onupdate=datetime.utcnow,
         nullable=False
     )
-    
+
     # Relationships
     owner: Mapped["User"] = relationship(
         "User",
         back_populates="accounts",
         lazy="selectin"
     )
-    
+
+    @property
+    def status(self) -> str:
+        """
+        Вычисляемое свойство статуса аккаунта.
+
+        Returns:
+            str: 'online' если подключен, иначе 'offline'
+        """
+        return "online" if self.is_connected else "offline"
+
+    def update_last_activity(self) -> None:
+        """Обновление времени последней активности."""
+        self.last_activity = datetime.utcnow()
+
     def __repr__(self) -> str:
         return f"<Account(id={self.id}, phone='{self.phone}', is_connected={self.is_connected})>"
