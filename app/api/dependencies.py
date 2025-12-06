@@ -1,6 +1,7 @@
-from typing import Annotated
-from fastapi import Depends, HTTPException, status
+from typing import Annotated, Optional
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security.http import HTTPBearer as HTTPBearerBase
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -9,8 +10,26 @@ from app.utils.jwt import decode_access_token
 from app.services.auth_service import AuthService
 
 
+class CustomHTTPBearer(HTTPBearerBase):
+    """Кастомный HTTPBearer с правильным форматом ошибок."""
+
+    async def __call__(self, request: Request) -> HTTPAuthorizationCredentials:
+        try:
+            return await super().__call__(request)
+        except HTTPException:
+            # Перехватываем исключение от базового HTTPBearer и выбрасываем своё
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": "UNAUTHORIZED",
+                    "message": "Требуется авторизация"
+                },
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+
 # HTTP Bearer схема для Swagger UI
-security = HTTPBearer()
+security = CustomHTTPBearer()
 
 
 async def get_current_user(

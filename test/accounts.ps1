@@ -297,7 +297,6 @@ function Test-CreateAccountInvalidPhone {
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
 
-            # Проверяем новый формат ответа
             if ($errorDetails.error -eq "VALIDATION_ERROR") {
                 Write-Success "✓ Error code is correct (VALIDATION_ERROR)"
 
@@ -472,6 +471,115 @@ function Test-DeleteNonExistentAccount {
     }
 }
 
+# ===== AUTHORIZATION TESTS (401) =====
+
+function Test-GetAccountsWithoutAuth {
+    Write-Info "`n=== TEST: Get Accounts Without Authorization ==="
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Get -Headers $HEADERS -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected request without authorization"
+        if ($_.Exception.Response.StatusCode -eq 401) {
+            Write-Success "✓ Correct status code (401)"
+        } else {
+            Write-Error "✗ Incorrect status code (expected 401)"
+            Write-Info "Got: $($_.Exception.Response.StatusCode)"
+        }
+
+        if ($_.ErrorDetails.Message) {
+            $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+            Write-Info "Error response:"
+            $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+        }
+    }
+}
+
+function Test-CreateAccountWithoutAuth {
+    Write-Info "`n=== TEST: Create Account Without Authorization ==="
+    $body = @{
+        name = "Test Account"
+        phoneNumber = "+79991234567"
+        apiId = 12345678
+        apiHash = "abcdef1234567890abcdef1234567890"
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected request without authorization"
+        if ($_.Exception.Response.StatusCode -eq 401) {
+            Write-Success "✓ Correct status code (401)"
+        } else {
+            Write-Error "✗ Incorrect status code (expected 401)"
+            Write-Info "Got: $($_.Exception.Response.StatusCode)"
+        }
+
+        if ($_.ErrorDetails.Message) {
+            $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+            Write-Info "Error response:"
+            $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+        }
+    }
+}
+
+function Test-UpdateAccountWithoutAuth {
+    Write-Info "`n=== TEST: Update Account Without Authorization ==="
+    $body = @{
+        name = "Should Not Work"
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/accounts/1" -Method Patch -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected request without authorization"
+        if ($_.Exception.Response.StatusCode -eq 401) {
+            Write-Success "✓ Correct status code (401)"
+        } else {
+            Write-Error "✗ Incorrect status code (expected 401)"
+            Write-Info "Got: $($_.Exception.Response.StatusCode)"
+        }
+
+        if ($_.ErrorDetails.Message) {
+            $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+            Write-Info "Error response:"
+            $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+        }
+    }
+}
+
+function Test-DeleteAccountWithoutAuth {
+    Write-Info "`n=== TEST: Delete Account Without Authorization ==="
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/accounts/1" -Method Delete -Headers $HEADERS -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Write-Info "Status Code: $statusCode"
+    }
+    catch {
+        Write-Success "✓ Correctly rejected request without authorization"
+        if ($_.Exception.Response.StatusCode -eq 401) {
+            Write-Success "✓ Correct status code (401)"
+        } else {
+            Write-Error "✗ Incorrect status code (expected 401)"
+            Write-Info "Got: $($_.Exception.Response.StatusCode)"
+        }
+
+        if ($_.ErrorDetails.Message) {
+            $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+            Write-Info "Error response:"
+            $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+        }
+    }
+}
+
 function Run-AllTests {
     Write-Host "`n╔════════════════════════════════════════╗" -ForegroundColor Yellow
     Write-Host "║   COMANASO ACCOUNTS API TESTS          ║" -ForegroundColor Yellow
@@ -486,6 +594,12 @@ function Run-AllTests {
     Write-Host "`n=== CLEANUP BEFORE TESTS ===" -ForegroundColor Yellow
     Cleanup-TestAccounts
     Start-Sleep -Seconds 1
+
+    Write-Host "`n=== AUTHORIZATION TESTS (401) ===" -ForegroundColor Yellow
+    Test-GetAccountsWithoutAuth; Start-Sleep -Seconds 1
+    Test-CreateAccountWithoutAuth; Start-Sleep -Seconds 1
+    Test-UpdateAccountWithoutAuth; Start-Sleep -Seconds 1
+    Test-DeleteAccountWithoutAuth; Start-Sleep -Seconds 1
 
     Write-Host "`n=== POSITIVE TESTS ===" -ForegroundColor Yellow
     Test-GetAccounts; Start-Sleep -Seconds 1
@@ -529,8 +643,12 @@ function Show-Menu {
     Write-Host "8. Update Non-Existent Account (negative test)"
     Write-Host "9. Delete Account"
     Write-Host "10. Delete Non-Existent Account (negative test)"
-    Write-Host "11. Run All Tests"
-    Write-Host "12. Cleanup Test Users"
+    Write-Host "11. Get Accounts Without Auth (401 test)"
+    Write-Host "12. Create Account Without Auth (401 test)"
+    Write-Host "13. Update Account Without Auth (401 test)"
+    Write-Host "14. Delete Account Without Auth (401 test)"
+    Write-Host "15. Run All Tests"
+    Write-Host "16. Cleanup Test Users"
     Write-Host "0. Exit"
     Write-Host ""
 }
@@ -550,8 +668,12 @@ if ($args.Count -eq 0) {
             "8" { Test-UpdateNonExistentAccount }
             "9" { Test-DeleteAccount }
             "10" { Test-DeleteNonExistentAccount }
-            "11" { Run-AllTests }
-            "12" { Cleanup-TestUsers }
+            "11" { Test-GetAccountsWithoutAuth }
+            "12" { Test-CreateAccountWithoutAuth }
+            "13" { Test-UpdateAccountWithoutAuth }
+            "14" { Test-DeleteAccountWithoutAuth }
+            "15" { Run-AllTests }
+            "16" { Cleanup-TestUsers }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
         }
