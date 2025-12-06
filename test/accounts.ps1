@@ -7,6 +7,7 @@ $HEADERS = @{
 # Глобальная переменная для хранения токена
 $script:AuthToken = $null
 $script:TestAccountId = $null
+$script:SecondUserToken = $null
 
 # Функция для настройки тестового пользователя
 function Setup-TestUser {
@@ -63,6 +64,73 @@ function Setup-TestUser {
             return $false
         }
     }
+}
+
+# Функция для настройки второго тестового пользователя
+function Setup-SecondTestUser {
+    Write-Info "`n=== SETUP: Ensure second test user exists ==="
+
+    $login = "test2@example.com"
+    $password = "Password123"
+
+    # Пытаемся залогиниться
+    $loginBody = @{
+        login = $login
+        password = $password
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/login" `
+            -Method Post `
+            -Headers $HEADERS `
+            -Body $loginBody
+
+        $script:SecondUserToken = $response.token
+        Write-Success "✓ Second test user exists, logged in successfully"
+        return $true
+    }
+    catch {
+        # Пользователь не существует, создаем
+        Write-Info "Second test user doesn't exist, creating..."
+
+        $registerBody = @{
+            login = $login
+            password = $password
+        } | ConvertTo-Json
+
+        try {
+            $registerResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/register" `
+                -Method Post `
+                -Headers $HEADERS `
+                -Body $registerBody
+
+            Write-Success "✓ Second test user created successfully"
+
+            # Теперь логинимся
+            $loginResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/login" `
+                -Method Post `
+                -Headers $HEADERS `
+                -Body $loginBody
+
+            $script:SecondUserToken = $loginResponse.token
+            Write-Success "✓ Logged in with second test user"
+            return $true
+        }
+        catch {
+            Write-Error "✗ Failed to create second test user: $($_.Exception.Message)"
+            return $false
+        }
+    }
+}
+
+function Get-SecondUserAuthHeaders {
+    if (-not $script:SecondUserToken) {
+        Write-Error "✗ No second user auth token. Setup second user first"
+        return $null
+    }
+    $headers = $HEADERS.Clone()
+    $headers["Authorization"] = "Bearer $script:SecondUserToken"
+    return $headers
 }
 
 function Write-Success { Write-Host $args -ForegroundColor Green }
@@ -471,6 +539,62 @@ function Test-DeleteNonExistentAccount {
     }
 }
 
+function Test-DeleteOtherUserAccount {
+    Write-Info "`n=== TEST: Delete Other User's Account ==="
+
+    # Создаем второго пользователя
+    if (-not (Setup-SecondTestUser)) {
+        Write-Error "✗ Failed to setup second test user"
+        return
+    }
+
+    # Убедимся что первый пользователь залогинен и имеет аккаунт
+    if (-not $script:TestAccountId) {
+        Write-Info "Creating account for first user..."
+        Test-CreateAccount | Out-Null
+        if (-not $script:TestAccountId) {
+            Write-Error "✗ Failed to create account for first user"
+            return
+        }
+    }
+
+    # Получаем заголовки второго пользователя
+    $secondUserHeaders = Get-SecondUserAuthHeaders
+    if (-not $secondUserHeaders) { return }
+
+    # Пытаемся удалить аккаунт первого пользователя от имени второго
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId" -Method Delete -Headers $secondUserHeaders -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Write-Info "Status Code: $statusCode"
+    }
+    catch {
+        Write-Success "✓ Correctly rejected delete of other user's account"
+        if ($_.ErrorDetails.Message) {
+            $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+            Write-Info "Error response:"
+            $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+            if ($errorDetails.error -eq "ACCOUNT_NOT_FOUND") {
+                Write-Success "✓ Error code is correct (ACCOUNT_NOT_FOUND)"
+                Write-Success "✓ Second user cannot see first user's account (good isolation)"
+
+                if ($errorDetails.message -like "*не найден*") {
+                    Write-Success "✓ Error message is correct"
+                } else {
+                    Write-Error "✗ Error message is incorrect"
+                    Write-Info "Expected message about account not found"
+                    Write-Info "Got: $($errorDetails.message)"
+                }
+            } else {
+                Write-Error "✗ Error code is incorrect"
+                Write-Info "Expected: ACCOUNT_NOT_FOUND"
+                Write-Info "Got: $($errorDetails.error)"
+            }
+        }
+    }
+}
+
 # ===== AUTHORIZATION TESTS (401) =====
 
 function Test-GetAccountsWithoutAuth {
@@ -493,6 +617,14 @@ function Test-GetAccountsWithoutAuth {
             $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+            if ($errorDetails.error -eq "UNAUTHORIZED") {
+                Write-Success "✓ Error code is correct (UNAUTHORIZED)"
+            } else {
+                Write-Error "✗ Error code is incorrect"
+                Write-Info "Expected: UNAUTHORIZED"
+                Write-Info "Got: $($errorDetails.error)"
+            }
         }
     }
 }
@@ -524,6 +656,14 @@ function Test-CreateAccountWithoutAuth {
             $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+            if ($errorDetails.error -eq "UNAUTHORIZED") {
+                Write-Success "✓ Error code is correct (UNAUTHORIZED)"
+            } else {
+                Write-Error "✗ Error code is incorrect"
+                Write-Info "Expected: UNAUTHORIZED"
+                Write-Info "Got: $($errorDetails.error)"
+            }
         }
     }
 }
@@ -576,6 +716,14 @@ function Test-DeleteAccountWithoutAuth {
             $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+            if ($errorDetails.error -eq "UNAUTHORIZED") {
+                Write-Success "✓ Error code is correct (UNAUTHORIZED)"
+            } else {
+                Write-Error "✗ Error code is incorrect"
+                Write-Info "Expected: UNAUTHORIZED"
+                Write-Info "Got: $($errorDetails.error)"
+            }
         }
     }
 }
@@ -615,6 +763,8 @@ function Run-AllTests {
     Test-UpdateNonExistentAccount; Start-Sleep -Seconds 1
 
     # Тесты удаления
+    Write-Host "`n=== DELETE TESTS ===" -ForegroundColor Yellow
+    Test-DeleteOtherUserAccount; Start-Sleep -Seconds 1
     Test-DeleteAccount; Start-Sleep -Seconds 1
     Test-DeleteNonExistentAccount; Start-Sleep -Seconds 1
 
