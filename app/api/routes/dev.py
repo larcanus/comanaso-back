@@ -34,7 +34,7 @@ async def cleanup_test_users(
 
     # Удаляем пользователей с test в email или username
     stmt = delete(User).where(
-        (User.email.ilike('%test%')) | (User.username.ilike('%test%'))
+        (User.email.ilike('%tes%')) | (User.username.ilike('%tes%'))
     )
     
     result = await db.execute(stmt)

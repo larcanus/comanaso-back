@@ -473,7 +473,7 @@ function Test-InvalidJSON {
 function Test-RegisterBoundaryLogin {
     Write-Info "`n=== TEST: Register with Boundary Login (3 chars) ==="
     $timestamp = Get-Date -Format "HHmmss"
-    $login = "abc$timestamp"  # Уникальный логин: abc135425
+    $login = "tes$timestamp"  # Уникальный логин: abc135425
 
     try {
         $body = @{
@@ -497,7 +497,7 @@ function Test-RegisterBoundaryLogin {
 function Test-RegisterBoundaryPassword {
     Write-Info "`n=== TEST: Register with Boundary Password (6 chars) ==="
     $timestamp = Get-Date -Format "HHmmss"
-    $login = "boundary_pw_$timestamp"
+    $login = "test_boundary_pw_$timestamp"
 
     try {
         $body = @{
@@ -572,6 +572,7 @@ function Run-AllTests {
 
     # ФИНАЛЬНАЯ ОЧИСТКА
     Write-Host "`n=== FINAL CLEANUP ===" -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
     Cleanup-TestUsers
 
     Write-Host "`n╔════════════════════════════════════════╗" -ForegroundColor Green
