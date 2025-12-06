@@ -117,8 +117,6 @@ Response 200:
     "apiId": "12345678",
     "apiHash": "abcdef1234567890abcdef1234567890",
     "status": "online",           // online | offline | connecting | error
-    "entity": null,               // Telegram user entity (если подключен)
-    "errorMessage": null,
     "createdAt": "2024-01-15T10:30:00Z",
     "updatedAt": "2024-01-15T12:45:00Z"
   },
@@ -129,8 +127,6 @@ Response 200:
     "apiId": "87654321",
     "apiHash": "1234567890abcdef1234567890abcdef",
     "status": "offline",
-    "entity": null,
-    "errorMessage": null,
     "createdAt": "2024-01-16T09:00:00Z",
     "updatedAt": "2024-01-16T09:00:00Z"
   }
@@ -160,8 +156,6 @@ Response 201:
   "apiId": "12345678",
   "apiHash": "abcdef1234567890abcdef1234567890",
   "status": "offline",
-  "entity": null,
-  "errorMessage": null,
   "createdAt": "2024-01-17T14:20:00Z",
   "updatedAt": "2024-01-17T14:20:00Z"
 }
@@ -201,8 +195,6 @@ Response 200:
   "apiId": "12345678",
   "apiHash": "new_hash",
   "status": "offline",
-  "entity": null,
-  "errorMessage": null,
   "createdAt": "2024-01-15T10:30:00Z",
   "updatedAt": "2024-01-17T15:00:00Z"
 }

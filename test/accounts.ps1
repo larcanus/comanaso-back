@@ -88,10 +88,10 @@ function Cleanup-TestAccounts {
 
             foreach ($account in $response.accounts) {
                 # Удаляем тестовые аккаунты (с номером +79991234567 или именем содержащим "Test")
-                if ($account.phone -eq "+79991234567" -or $account.name -like "*Test*") {
+                if ($account.phoneNumber -eq "+79991234567" -or $account.name -like "*Test*") {
                     try {
                         Invoke-RestMethod -Uri "$BASE_URL/accounts/$($account.id)" -Method Delete -Headers $authHeaders | Out-Null
-                        Write-Success "✓ Deleted account: $($account.name) ($($account.phone))"
+                        Write-Success "✓ Deleted account: $($account.name) ($($account.phoneNumber))"
                     }
                     catch {
                         Write-Error "✗ Failed to delete account $($account.id): $($_.Exception.Message)"
@@ -147,7 +147,7 @@ function Test-GetAccounts {
             Write-Success "✓ Response contains accounts array"
             if ($response.accounts.Count -gt 0) {
                 $account = $response.accounts[0]
-                if ($account.id -and $account.name -and $account.phone -and $account.status) {
+                if ($account.id -and $account.name -and $account.phoneNumber -and $account.status) {
                     Write-Success "✓ Account structure is correct"
                 } else {
                     Write-Error "✗ Account structure is incorrect"
@@ -186,11 +186,16 @@ function Test-CreateAccount {
         # Сохраняем ID для последующих тестов
         $script:TestAccountId = $response.id
 
-        # Проверка структуры ответа
-        if ($response.id -and $response.name -eq "Test Account" -and $response.phone -eq "+79991234567" -and $response.status -eq "offline") {
+        # Проверка структуры ответа (исправлено: используем phoneNumber вместо phone)
+        if ($response.id -and
+            $response.name -eq "Test Account" -and
+            $response.phoneNumber -eq "+79991234567" -and
+            $response.status -eq "offline") {
             Write-Success "✓ Account created with correct data"
         } else {
             Write-Error "✗ Account data is incorrect"
+            Write-Info "Expected: id exists, name='Test Account', phoneNumber='+79991234567', status='offline'"
+            Write-Info "Got: id=$($response.id), name='$($response.name)', phoneNumber='$($response.phoneNumber)', status='$($response.status)'"
         }
 
         return $response
@@ -295,10 +300,12 @@ function Test-UpdateAccount {
         Show-Response $response $statusCode
 
         # Проверка обновленных данных
-        if ($response.name -eq "Updated Test Account" -and $response.api_id -eq 87654321) {
+        if ($response.name -eq "Updated Test Account" -and $response.apiId -eq 87654321) {
             Write-Success "✓ Account updated with correct data"
         } else {
             Write-Error "✗ Account data is incorrect"
+            Write-Info "Expected: name='Updated Test Account', apiId=87654321"
+            Write-Info "Got: name='$($response.name)', apiId=$($response.apiId)"
         }
 
         return $response
