@@ -124,6 +124,19 @@ function Cleanup-TestAccounts {
     }
 }
 
+function Cleanup-TestUsers {
+    Write-Info "`n=== CLEANUP: Removing test users ==="
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/dev/cleanup/test-users" -Method Delete -Headers $HEADERS -StatusCodeVariable statusCode
+        Write-Success "✓ Test users cleanup successful"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Error "✗ Test users cleanup failed (dev endpoint might be disabled)"
+        Write-Host $_.Exception.Message
+    }
+}
+
 function Test-Login {
     Write-Info "`n=== TEST: Login to get token ==="
 
@@ -464,6 +477,9 @@ function Run-AllTests {
     # Проверка что аккаунт удален
     Test-GetAccounts
 
+    Write-Host "`n=== CLEANUP AFTER TESTS ===" -ForegroundColor Yellow
+    Cleanup-TestUsers
+
     Write-Host "`n╔════════════════════════════════════════╗" -ForegroundColor Yellow
     Write-Host "║   TESTS COMPLETED                      ║" -ForegroundColor Yellow
     Write-Host "╚════════════════════════════════════════╝`n" -ForegroundColor Yellow
@@ -484,6 +500,7 @@ function Show-Menu {
     Write-Host "9. Delete Account"
     Write-Host "10. Delete Non-Existent Account (negative test)"
     Write-Host "11. Run All Tests"
+    Write-Host "12. Cleanup Test Users"
     Write-Host "0. Exit"
     Write-Host ""
 }
@@ -504,6 +521,7 @@ if ($args.Count -eq 0) {
             "9" { Test-DeleteAccount }
             "10" { Test-DeleteNonExistentAccount }
             "11" { Run-AllTests }
+            "12" { Cleanup-TestUsers }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
         }
