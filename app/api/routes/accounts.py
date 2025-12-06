@@ -23,7 +23,7 @@ router = APIRouter(
 
 
 @router.post(
-    "/",
+    "",
     response_model=AccountDetailResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Создать новый Telegram аккаунт"
@@ -52,7 +52,7 @@ async def create_account(
 
 
 @router.get(
-    "/",
+    "",
     response_model=AccountListResponse,
     summary="Получить список всех аккаунтов"
 )
@@ -109,7 +109,7 @@ async def get_account(
     return account
 
 
-@router.put(
+@router.patch(
     "/{account_id}",
     response_model=AccountDetailResponse,
     summary="Обновить данные аккаунта"
