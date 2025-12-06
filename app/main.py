@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 import logging
@@ -83,6 +83,26 @@ app.add_middleware(
 
 
 # Exception handlers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Обработчик HTTPException с упрощенным форматом для публичных API."""
+    path = request.url.path
+    use_simplified = any(path.startswith(route) for route in SIMPLIFIED_ERROR_ROUTES)
+
+    if use_simplified and isinstance(exc.detail, dict):
+        # Возвращаем содержимое detail без обертки
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.detail
+        )
+
+    # Стандартный формат FastAPI для остальных роутов
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Обработчик ошибок валидации Pydantic."""
