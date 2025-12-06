@@ -175,7 +175,7 @@ class AccountService:
 
         try:
             await db.commit()
-            await db.refresh(account)
+            await db.refresh(account)  # ДОБАВЛЕНО: обновляем объект из БД
             return account
         except IntegrityError:
             await db.rollback()

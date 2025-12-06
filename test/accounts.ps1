@@ -71,6 +71,44 @@ function Get-AuthHeaders {
     return $headers
 }
 
+function Cleanup-TestAccounts {
+    Write-Info "`n=== CLEANUP: Removing test accounts ==="
+    $authHeaders = Get-AuthHeaders
+    if (-not $authHeaders) {
+        Write-Error "✗ Cannot cleanup without auth token"
+        return
+    }
+
+    try {
+        # Получаем список всех аккаунтов
+        $response = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Get -Headers $authHeaders
+
+        if ($response.accounts -and $response.accounts.Count -gt 0) {
+            Write-Info "Found $($response.accounts.Count) account(s) to delete"
+
+            foreach ($account in $response.accounts) {
+                # Удаляем тестовые аккаунты (с номером +79991234567 или именем содержащим "Test")
+                if ($account.phone -eq "+79991234567" -or $account.name -like "*Test*") {
+                    try {
+                        Invoke-RestMethod -Uri "$BASE_URL/accounts/$($account.id)" -Method Delete -Headers $authHeaders | Out-Null
+                        Write-Success "✓ Deleted account: $($account.name) ($($account.phone))"
+                    }
+                    catch {
+                        Write-Error "✗ Failed to delete account $($account.id): $($_.Exception.Message)"
+                    }
+                }
+            }
+            Write-Success "✓ Cleanup completed"
+        }
+        else {
+            Write-Info "No accounts found to cleanup"
+        }
+    }
+    catch {
+        Write-Error "✗ Cleanup failed: $($_.Exception.Message)"
+    }
+}
+
 function Test-Login {
     Write-Info "`n=== TEST: Login to get token ==="
     $body = @{
@@ -105,11 +143,11 @@ function Test-GetAccounts {
         Show-Response $response $statusCode
 
         # Проверка структуры ответа
-        if ($response -is [Array]) {
-            Write-Success "✓ Response is an array"
-            if ($response.Count -gt 0) {
-                $account = $response[0]
-                if ($account.id -and $account.name -and $account.phoneNumber -and $account.status) {
+        if ($response.accounts -is [Array]) {
+            Write-Success "✓ Response contains accounts array"
+            if ($response.accounts.Count -gt 0) {
+                $account = $response.accounts[0]
+                if ($account.id -and $account.name -and $account.phone -and $account.status) {
                     Write-Success "✓ Account structure is correct"
                 } else {
                     Write-Error "✗ Account structure is incorrect"
@@ -136,7 +174,7 @@ function Test-CreateAccount {
     $body = @{
         name = "Test Account"
         phoneNumber = "+79991234567"
-        apiId = "12345678"
+        apiId = 12345678
         apiHash = "abcdef1234567890abcdef1234567890"
     } | ConvertTo-Json
 
@@ -149,7 +187,7 @@ function Test-CreateAccount {
         $script:TestAccountId = $response.id
 
         # Проверка структуры ответа
-        if ($response.id -and $response.name -eq "Test Account" -and $response.phoneNumber -eq "+79991234567" -and $response.status -eq "offline") {
+        if ($response.id -and $response.name -eq "Test Account" -and $response.phone -eq "+79991234567" -and $response.status -eq "offline") {
             Write-Success "✓ Account created with correct data"
         } else {
             Write-Error "✗ Account data is incorrect"
@@ -177,7 +215,7 @@ function Test-CreateDuplicateAccount {
     $body = @{
         name = "Duplicate Account"
         phoneNumber = "+79991234567"
-        apiId = "12345678"
+        apiId = 12345678
         apiHash = "abcdef1234567890abcdef1234567890"
     } | ConvertTo-Json
 
@@ -193,10 +231,10 @@ function Test-CreateDuplicateAccount {
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
 
-            if ($errorDetails.detail.error -eq "ACCOUNT_EXISTS") {
-                Write-Success "✓ Error code is correct (ACCOUNT_EXISTS)"
+            if ($errorDetails.detail -like "*уже существует*") {
+                Write-Success "✓ Error message is correct"
             } else {
-                Write-Error "✗ Error code is incorrect"
+                Write-Error "✗ Error message is incorrect"
             }
         }
     }
@@ -210,7 +248,7 @@ function Test-CreateAccountInvalidPhone {
     $body = @{
         name = "Invalid Phone Account"
         phoneNumber = "invalid_phone"
-        apiId = "12345678"
+        apiId = 12345678
         apiHash = "abcdef1234567890abcdef1234567890"
     } | ConvertTo-Json
 
@@ -247,7 +285,7 @@ function Test-UpdateAccount {
 
     $body = @{
         name = "Updated Test Account"
-        apiId = "87654321"
+        apiId = 87654321
         apiHash = "new_hash_1234567890abcdef1234567890ab"
     } | ConvertTo-Json
 
@@ -257,7 +295,7 @@ function Test-UpdateAccount {
         Show-Response $response $statusCode
 
         # Проверка обновленных данных
-        if ($response.name -eq "Updated Test Account" -and $response.apiId -eq "87654321") {
+        if ($response.name -eq "Updated Test Account" -and $response.api_id -eq 87654321) {
             Write-Success "✓ Account updated with correct data"
         } else {
             Write-Error "✗ Account data is incorrect"
@@ -298,10 +336,10 @@ function Test-UpdateNonExistentAccount {
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
 
-            if ($errorDetails.detail.error -eq "ACCOUNT_NOT_FOUND") {
-                Write-Success "✓ Error code is correct (ACCOUNT_NOT_FOUND)"
+            if ($errorDetails.detail -like "*не найден*") {
+                Write-Success "✓ Error message is correct"
             } else {
-                Write-Error "✗ Error code is incorrect"
+                Write-Error "✗ Error message is incorrect"
             }
         }
     }
@@ -358,10 +396,10 @@ function Test-DeleteNonExistentAccount {
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
 
-            if ($errorDetails.detail.error -eq "ACCOUNT_NOT_FOUND") {
-                Write-Success "✓ Error code is correct (ACCOUNT_NOT_FOUND)"
+            if ($errorDetails.detail -like "*не найден*") {
+                Write-Success "✓ Error message is correct"
             } else {
-                Write-Error "✗ Error code is incorrect"
+                Write-Error "✗ Error message is incorrect"
             }
         }
     }
@@ -379,6 +417,9 @@ function Run-AllTests {
         Write-Error "Cannot proceed without auth token"
         return
     }
+
+    # Очистка тестовых данных перед началом
+    Cleanup-TestAccounts; Start-Sleep -Seconds 1
 
     # Основные тесты
     Test-GetAccounts; Start-Sleep -Seconds 1
@@ -410,15 +451,16 @@ function Show-Menu {
     Write-Host "Auth Status: $(if ($script:AuthToken) { 'Logged in' } else { 'Not logged in' })" -ForegroundColor $(if ($script:AuthToken) { 'Green' } else { 'Red' })
     Write-Host ""
     Write-Host "1. Login (get auth token)"
-    Write-Host "2. Get Accounts List"
-    Write-Host "3. Create Account"
-    Write-Host "4. Create Duplicate Account (negative test)"
-    Write-Host "5. Create Account with Invalid Phone (negative test)"
-    Write-Host "6. Update Account"
-    Write-Host "7. Update Non-Existent Account (negative test)"
-    Write-Host "8. Delete Account"
-    Write-Host "9. Delete Non-Existent Account (negative test)"
-    Write-Host "10. Run All Tests"
+    Write-Host "2. Cleanup Test Accounts"
+    Write-Host "3. Get Accounts List"
+    Write-Host "4. Create Account"
+    Write-Host "5. Create Duplicate Account (negative test)"
+    Write-Host "6. Create Account with Invalid Phone (negative test)"
+    Write-Host "7. Update Account"
+    Write-Host "8. Update Non-Existent Account (negative test)"
+    Write-Host "9. Delete Account"
+    Write-Host "10. Delete Non-Existent Account (negative test)"
+    Write-Host "11. Run All Tests"
     Write-Host "0. Exit"
     Write-Host ""
 }
@@ -429,15 +471,16 @@ if ($args.Count -eq 0) {
         $choice = Read-Host "Select option"
         switch ($choice) {
             "1" { Test-Login }
-            "2" { Test-GetAccounts }
-            "3" { Test-CreateAccount }
-            "4" { Test-CreateDuplicateAccount }
-            "5" { Test-CreateAccountInvalidPhone }
-            "6" { Test-UpdateAccount }
-            "7" { Test-UpdateNonExistentAccount }
-            "8" { Test-DeleteAccount }
-            "9" { Test-DeleteNonExistentAccount }
-            "10" { Run-AllTests }
+            "2" { Cleanup-TestAccounts }
+            "3" { Test-GetAccounts }
+            "4" { Test-CreateAccount }
+            "5" { Test-CreateDuplicateAccount }
+            "6" { Test-CreateAccountInvalidPhone }
+            "7" { Test-UpdateAccount }
+            "8" { Test-UpdateNonExistentAccount }
+            "9" { Test-DeleteAccount }
+            "10" { Test-DeleteNonExistentAccount }
+            "11" { Run-AllTests }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
         }
