@@ -269,10 +269,22 @@ function Test-CreateAccountInvalidPhone {
             Write-Info "Error response:"
             $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
 
-            if ($errorDetails.detail.error -eq "VALIDATION_ERROR") {
+            # Проверяем новый формат ответа
+            if ($errorDetails.error -eq "VALIDATION_ERROR") {
                 Write-Success "✓ Error code is correct (VALIDATION_ERROR)"
+
+                # Проверяем что сообщение содержит информацию о формате телефона
+                if ($errorDetails.message -like "*формат*" -or $errorDetails.message -like "*телефон*") {
+                    Write-Success "✓ Error message is correct"
+                } else {
+                    Write-Error "✗ Error message is incorrect"
+                    Write-Info "Expected message about phone format"
+                    Write-Info "Got: $($errorDetails.message)"
+                }
             } else {
                 Write-Error "✗ Error code is incorrect"
+                Write-Info "Expected: VALIDATION_ERROR"
+                Write-Info "Got: $($errorDetails.error)"
             }
         }
     }
