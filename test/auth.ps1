@@ -513,7 +513,7 @@ function Test-RegisterBoundaryPassword {
     }
     catch {
         Write-Error "✗ Registration failed (6 chars should be valid)"
-232311        Write-Host $_.Exception.Message
+        Write-Host $_.Exception.Message
         return $null
     }
 }
