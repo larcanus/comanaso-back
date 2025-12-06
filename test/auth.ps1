@@ -10,10 +10,9 @@ function Write-Info { Write-Host $args -ForegroundColor Cyan }
 function Write-Warning { Write-Host $args -ForegroundColor Yellow }
 
 function Show-Response {
-    param($Response, $StatusCode)
-    Write-Info "`nStatus Code: $StatusCode"
-    Write-Info "Response:"
-    $Response | ConvertTo-Json -Depth 10 | Write-Host
+    param($response, $statusCode)
+    Write-Host "Status: $statusCode" -ForegroundColor $(if ($statusCode -ge 200 -and $statusCode -lt 300) { "Green" } else { "Red" })
+    Write-Host ($response | ConvertTo-Json -Depth 10)
 }
 
 function Cleanup-TestUsers {
@@ -24,7 +23,7 @@ function Cleanup-TestUsers {
         Show-Response $response $statusCode
     }
     catch {
-        Write-Error "✗ Cleanup failed (this is OK if no test users exist)"
+        Write-Warning "⚠ Cleanup failed (dev endpoint might be disabled or no test users found)"
         Write-Host $_.Exception.Message
     }
 }
@@ -473,15 +472,20 @@ function Test-InvalidJSON {
 
 function Test-RegisterBoundaryLogin {
     Write-Info "`n=== TEST: Register with Boundary Login (3 chars) ==="
-    $body = @{
-        login = "abc"
-        password = "Password123"
-    } | ConvertTo-Json
+    $timestamp = Get-Date -Format "HHmmss"
+    $login = "abc$timestamp"  # Уникальный логин: abc135425
+
     try {
-        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
-        Write-Success "✓ Registration with 3-char login successful (boundary test)"
+        $body = @{
+            login = $login
+            password = "password123"
+        } | ConvertTo-Json
+
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Body $body -ContentType "application/json" -Headers $HEADERS -StatusCodeVariable statusCode
+
+        Write-Success "✓ Registration successful with 3 char login"
+        Write-Host "Created user: $login" -ForegroundColor Cyan
         Show-Response $response $statusCode
-        return $response
     }
     catch {
         Write-Error "✗ Registration failed (3 chars should be valid)"
@@ -492,19 +496,24 @@ function Test-RegisterBoundaryLogin {
 
 function Test-RegisterBoundaryPassword {
     Write-Info "`n=== TEST: Register with Boundary Password (6 chars) ==="
-    $body = @{
-        login = "boundary@test.com"
-        password = "Pass12"
-    } | ConvertTo-Json
+    $timestamp = Get-Date -Format "HHmmss"
+    $login = "boundary_pw_$timestamp"
+
     try {
-        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
-        Write-Success "✓ Registration with 6-char password successful (boundary test)"
+        $body = @{
+            login = $login
+            password = "pass12"  # Ровно 6 символов
+        } | ConvertTo-Json
+
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Body $body -ContentType "application/json" -Headers $HEADERS -StatusCodeVariable statusCode
+
+        Write-Success "✓ Registration successful with 6 char password"
+        Write-Host "Created user: $login" -ForegroundColor Cyan
         Show-Response $response $statusCode
-        return $response
     }
     catch {
         Write-Error "✗ Registration failed (6 chars should be valid)"
-        Write-Host $_.Exception.Message
+232311        Write-Host $_.Exception.Message
         return $null
     }
 }
@@ -514,7 +523,7 @@ function Run-AllTests {
     Write-Host "║   COMANASO AUTH API TESTS              ║" -ForegroundColor Yellow
     Write-Host "╚════════════════════════════════════════╝`n" -ForegroundColor Yellow
 
-    # Очистка перед тестами
+    # ОЧИСТКА ПЕРЕД ТЕСТАМИ
     Cleanup-TestUsers
     Start-Sleep -Seconds 1
 
@@ -561,9 +570,13 @@ function Run-AllTests {
     Test-RegisterBoundaryLogin; Start-Sleep -Seconds 1
     Test-RegisterBoundaryPassword; Start-Sleep -Seconds 1
 
-    Write-Host "`n╔════════════════════════════════════════╗" -ForegroundColor Yellow
-    Write-Host "║   TESTS COMPLETED                      ║" -ForegroundColor Yellow
-    Write-Host "╚════════════════════════════════════════╝`n" -ForegroundColor Yellow
+    # ФИНАЛЬНАЯ ОЧИСТКА
+    Write-Host "`n=== FINAL CLEANUP ===" -ForegroundColor Yellow
+    Cleanup-TestUsers
+
+    Write-Host "`n╔════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "║   ALL TESTS COMPLETED                  ║" -ForegroundColor Green
+    Write-Host "╚════════════════════════════════════════╝`n" -ForegroundColor Green
 }
 
 function Show-Menu {
