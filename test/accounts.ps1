@@ -8,45 +8,60 @@ $HEADERS = @{
 $script:AuthToken = $null
 $script:TestAccountId = $null
 
-# Функция для логина и получения токена
-function Get-AuthToken {
-    Write-TestHeader "Login to get token"
+# Функция для настройки тестового пользователя
+function Setup-TestUser {
+    Write-Info "`n=== SETUP: Ensure test user exists ==="
 
-    $loginData = @{
-        login = "test@example.com"
-        password = "test123"
+    $login = "test@example.com"
+    $password = "Password123"
+
+    # Пытаемся залогиниться
+    $loginBody = @{
+        login = $login
+        password = $password
     } | ConvertTo-Json
 
     try {
-        $response = Invoke-RestMethod -Uri "$BASE_URL$AUTH_ENDPOINT/login" `
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/login" `
             -Method Post `
-            -Body $loginData `
-            -ContentType "application/json"
+            -Headers $HEADERS `
+            -Body $loginBody
 
-        $Global:AuthToken = $response.token
-        Write-Success "Login successful"
-        Write-Host "Token saved for subsequent requests`n"
-
-        # Отладочная информация
-        Write-Host "Status Code: 200"
-        Write-Host "Response:"
-        $response | ConvertTo-Json -Depth 10
-        Write-Host $Global:AuthToken
-
+        $script:AuthToken = $response.token
+        Write-Success "✓ Test user exists, logged in successfully"
         return $true
     }
     catch {
-        Write-Error "Login failed: $_"
+        # Пользователь не существует, создаем
+        Write-Info "Test user doesn't exist, creating..."
 
-        # Попытка показать детали ошибки
-        if ($_.Exception.Response) {
-            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-            $responseBody = $reader.ReadToEnd()
-            Write-Host "Error details:" -ForegroundColor $ErrorColor
-            $responseBody | ConvertFrom-Json | ConvertTo-Json -Depth 10
+        $registerBody = @{
+            login = $login
+            password = $password
+        } | ConvertTo-Json
+
+        try {
+            $registerResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/register" `
+                -Method Post `
+                -Headers $HEADERS `
+                -Body $registerBody
+
+            Write-Success "✓ Test user created successfully"
+
+            # Теперь логинимся
+            $loginResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/login" `
+                -Method Post `
+                -Headers $HEADERS `
+                -Body $loginBody
+
+            $script:AuthToken = $loginResponse.token
+            Write-Success "✓ Logged in with new test user"
+            return $true
         }
-
-        return $false
+        catch {
+            Write-Error "✗ Failed to create test user: $($_.Exception.Message)"
+            return $false
+        }
     }
 }
 
@@ -111,25 +126,15 @@ function Cleanup-TestAccounts {
 
 function Test-Login {
     Write-Info "`n=== TEST: Login to get token ==="
-    $body = @{
-        login = "test@example.com"
-        password = "Password123"
-    } | ConvertTo-Json
 
-    try {
-        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
-        Write-Success "✓ Login successful"
-        $script:AuthToken = $response.token
-        Write-Info "Token saved for subsequent requests"
-        Show-Response $response $statusCode
-        return $response.token
-    }
-    catch {
-        Write-Error "✗ Login failed"
-        Write-Host $_.Exception.Message
-        Write-Info "Make sure test user exists (run auth.ps1 tests first)"
+    if (-not (Setup-TestUser)) {
+        Write-Error "✗ Failed to setup test user"
         return $null
     }
+
+    Write-Success "✓ Login successful"
+    Write-Info "Token: $script:AuthToken"
+    return $script:AuthToken
 }
 
 function Test-GetAccounts {
@@ -186,7 +191,7 @@ function Test-CreateAccount {
         # Сохраняем ID для последующих тестов
         $script:TestAccountId = $response.id
 
-        # Проверка структуры ответа (исправлено: используем phoneNumber вместо phone)
+        # Проверка структуры ответа
         if ($response.id -and
             $response.name -eq "Test Account" -and
             $response.phoneNumber -eq "+79991234567" -and
@@ -429,23 +434,22 @@ function Run-AllTests {
     Write-Host "║   COMANASO ACCOUNTS API TESTS          ║" -ForegroundColor Yellow
     Write-Host "╚════════════════════════════════════════╝`n" -ForegroundColor Yellow
 
-    # Логин для получения токена
-    Test-Login; Start-Sleep -Seconds 1
-
-    if (-not $script:AuthToken) {
-        Write-Error "Cannot proceed without auth token"
+    # Убедимся что тестовый пользователь существует
+    if (-not (Setup-TestUser)) {
+        Write-Error "✗ Cannot run tests without test user"
         return
     }
 
-    # Очистка тестовых данных перед началом
-    Cleanup-TestAccounts; Start-Sleep -Seconds 1
+    Write-Host "`n=== CLEANUP BEFORE TESTS ===" -ForegroundColor Yellow
+    Cleanup-TestAccounts
+    Start-Sleep -Seconds 1
 
-    # Основные тесты
+    Write-Host "`n=== POSITIVE TESTS ===" -ForegroundColor Yellow
     Test-GetAccounts; Start-Sleep -Seconds 1
     Test-CreateAccount; Start-Sleep -Seconds 1
     Test-GetAccounts; Start-Sleep -Seconds 1
 
-    # Негативные тесты создания
+    Write-Host "`n=== NEGATIVE TESTS ===" -ForegroundColor Yellow
     Test-CreateDuplicateAccount; Start-Sleep -Seconds 1
     Test-CreateAccountInvalidPhone; Start-Sleep -Seconds 1
 
