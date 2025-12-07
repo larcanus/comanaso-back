@@ -1,7 +1,16 @@
-from typing import Annotated, Optional
+"""
+FastAPI dependencies для аутентификации и авторизации.
+Кастомный HTTPBearer с правильным форматом ошибок и get_current_user.
+
+Содержит:
+- CustomHTTPBearer: Кастомная схема аутентификации с правильным форматом ошибок
+- get_current_user: Зависимость для получения текущего пользователя из JWT токена
+- CurrentUser: Типизированная зависимость для удобства использования в роутах
+"""
+from typing import Annotated
 from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.security.http import HTTPBearer as HTTPBearerBase
+from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.security.http import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -10,7 +19,7 @@ from app.utils.jwt import decode_access_token
 from app.services.auth_service import AuthService
 
 
-class CustomHTTPBearer(HTTPBearerBase):
+class CustomHTTPBearer(HTTPBearer):
     """Кастомный HTTPBearer с правильным форматом ошибок."""
 
     async def __call__(self, request: Request) -> HTTPAuthorizationCredentials:
@@ -66,6 +75,16 @@ async def get_current_user(
 
     # Получение пользователя
     user = await AuthService.get_user_by_id(db, int(token_data.user_id))
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": "USER_NOT_FOUND",
+                "message": "Пользователь не найден"
+            },
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user
 
 

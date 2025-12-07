@@ -808,10 +808,9 @@ backend/
 │   ├── script.py.mako
 │   └── env.py                      # Alembic environment configuration. Настройка окружения для миграций базы данных.
 ├── app/
-│   ├── main.py                     # FastAPI app
+│   ├── main.py                     # FastAPI app. Настройка приложения, middleware, роутеров и lifecycle events.
 │   ├── config.py                   # Настройки
 │   ├── database.py                 # SQLAlchemy setup
-│   ├── dependencies.py             # FastAPI dependencies для аутентификации и авторизации.
 │   ├── models/
 │   │   ├── user.py                 # SQLAlchemy модель пользователя. Хранит данные о пользователях системы.
 │   │   └── account.py              # SQLAlchemy модель Telegram аккаунта. Хранит данные о подключенных Telegram аккаунтах.
@@ -828,7 +827,7 @@ backend/
 │   │   ├── security.py             # Утилиты для работы с паролями.
 │   │   └── telethon_client.py      # файла нет - какая-то логика с телетон
 │   └── api/
-│         ├──  dependencies.py      # тут логика для Кастомный HTTPBearer с правильным форматом ошибок и get_current_user
+│         ├──  dependencies.py      # FastAPI dependencies для аутентификации и авторизации. Кастомный HTTPBearer с правильным форматом ошибок.
 │         └──  routers/
 │               ├── auth.py         # API роутер для управления аутентификацией пользователей.
 │               ├── accounts.py     # API роутер для управления Telegram аккаунтами. CRUD операции с аккаунтами пользователя.
