@@ -800,28 +800,41 @@ VITE_WS_URL=ws://localhost:8000/ws
 
 ```
 backend/
+├── test/
+│   ├── accounts.ps1
+│   └── auth.ps1
+├── alembic/
+│   ├── version/
+│   ├── script.py.mako
+│   └── env.py                      # Alembic environment configuration. Настройка окружения для миграций базы данных.
 ├── app/
-│   ├── __init__.py
-│   ├── main.py                 # FastAPI app
-│   ├── config.py               # Настройки
-│   ├── database.py             # SQLAlchemy setup
+│   ├── main.py                     # FastAPI app
+│   ├── config.py                   # Настройки
+│   ├── database.py                 # SQLAlchemy setup
+│   ├── dependencies.py             # FastAPI dependencies для аутентификации и авторизации.
 │   ├── models/
-│   │   ├── user.py
-│   │   └── account.py
+│   │   ├── user.py                 # SQLAlchemy модель пользователя. Хранит данные о пользователях системы.
+│   │   └── account.py              # SQLAlchemy модель Telegram аккаунта. Хранит данные о подключенных Telegram аккаунтах.
 │   ├── schemas/
-│   │   ├── auth.py
-│   │   └── account.py
-│   ├── routers/
-│   │   ├── auth.py
-│   │   ├── accounts.py
-│   │   └── telegram.py
+│   │   ├── auth.py                 # Pydantic схемы для аутентификации. Валидация данных для регистрации, логина и токенов.
+│   │   ├── telegram.py             # Pydantic схемы для Telegram операций. Валидация данных для работы с Telegram API.
+│   │   └── account.py              # Pydantic схемы для работы с Telegram аккаунтами.
 │   ├── services/
-│   │   ├── auth_service.py
-│   │   └── telegram_service.py
-│   └── utils/
-│       ├── jwt.py
-│       └── telethon_client.py
-├── requirements.txt
+│   │   ├── auth_service.py         # Сервис для работы с аутентификацией пользователей
+│   │   ├── account_service.py      # Сервис для управления Telegram аккаунтами. Бизнес-логика CRUD операций с аккаунтами.
+│   │   └── telegram_service.py     # файла нет - какая-то логика с телетон
+│   ├── utils/
+│   │   ├── jwt.py                  # Утилиты для работы с JWT токенами.
+│   │   ├── security.py             # Утилиты для работы с паролями.
+│   │   └── telethon_client.py      # файла нет - какая-то логика с телетон
+│   └── api/
+│         ├──  dependencies.py      # тут логика для Кастомный HTTPBearer с правильным форматом ошибок и get_current_user
+│         └──  routers/
+│               ├── auth.py         # API роутер для управления аутентификацией пользователей.
+│               ├── accounts.py     # API роутер для управления Telegram аккаунтами. CRUD операции с аккаунтами пользователя.
+│               ├── dev.py          # Development/Testing endpoints. Используются только в dev окружении для тестирования.
+│               └── telegram.py     # файла нет - какая-то логика с телетон
+├── requirements.txt                # FastAPI и веб-сервер (пакеты)
 └── .env
 ```
 
