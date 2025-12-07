@@ -2,6 +2,25 @@
 $BASE_URL = "http://localhost:8000/api"
 $HEADERS = @{ "Content-Type" = "application/json" }
 
+# Получаем реальные API credentials из переменных окружения
+$envApiId = [int]$env:TELEGRAM_API_ID
+$envApiHash = $env:TELEGRAM_API_HASH
+$envPhone = $env:TELEGRAM_TEST_PHONE
+
+# Проверяем наличие переменных окружения
+if (-not $envApiId -or -not $envApiHash -or -not $envPhone) {
+    Write-Error "Необходимо установить переменные окружения:"
+    Write-Error "  TELEGRAM_API_ID - ваш API ID из https://my.telegram.org"
+    Write-Error "  TELEGRAM_API_HASH - ваш API Hash из https://my.telegram.org"
+    Write-Error "  TELEGRAM_TEST_PHONE - номер телефона для тестирования (формат: +79991234567)"
+    Write-Error ""
+    Write-Error "Пример установки в PowerShell:"
+    Write-Error "  `$env:TELEGRAM_API_ID = 'ваш_api_id'"
+    Write-Error "  `$env:TELEGRAM_API_HASH = 'ваш_api_hash'"
+    Write-Error "  `$env:TELEGRAM_TEST_PHONE = '+79991234567'"
+    exit 1
+}
+
 $script:AuthToken = $null
 $script:TestAccountId = $null
 
@@ -69,7 +88,7 @@ function Get-AuthHeaders {
 }
 
 function Ensure-TestAccount {
-    param($phone = "+79991234567", $name = "Test Telegram Account")
+    param($phone = $envPhone, $name = "Test Telegram Account")
     $h = Get-AuthHeaders
     if (-not $h) { return $null }
 
@@ -93,12 +112,12 @@ function Ensure-TestAccount {
         }
     }
 
-    # Создать новый
+    # Создать новый с реальными API credentials
     $body = @{
         name = $name
         phoneNumber = $phone
-        apiId = 12345678
-        apiHash = "abcdef1234567890abcdef1234567890"
+        apiId = $envApiId
+        apiHash = $envApiHash
     } | ConvertTo-Json
 
     try {
@@ -127,8 +146,10 @@ function Test-Connect {
         if ($resp -and ($resp.error -or $resp.status)) {
             if ($resp.error -eq "INVALID_API_CREDENTIALS") {
                 Write-Warning "Invalid API credentials detected. Проверьте apiId/apiHash для аккаунта $script:TestAccountId."
+                Write-Warning "Убедитесь, что вы используете реальные API credentials из https://my.telegram.org"
             } elseif ($resp.error -eq "TELETHON_ERROR" -and $resp.message -match "api_id\/api_hash") {
                 Write-Warning "Telethon returned api_id/api_hash error. Проверьте apiId/apiHash в настройках аккаунта."
+                Write-Warning "Убедитесь, что вы используете реальные API credentials из https://my.telegram.org"
             }
         }
     } catch {
@@ -139,6 +160,7 @@ function Test-Connect {
                 Show-Response $err $_.StatusCode
                 if ($err.error -eq "INVALID_API_CREDENTIALS" -or ($err.error -eq "TELETHON_ERROR" -and $err.message -match "api_id\/api_hash")) {
                     Write-Warning "Invalid API credentials detected in error response. Проверьте apiId/apiHash для аккаунта $script:TestAccountId."
+                    Write-Warning "Убедитесь, что вы используете реальные API credentials из https://my.telegram.org"
                 }
             } catch {
                 Write-Host $_.ErrorDetails.Message
@@ -210,6 +232,9 @@ function Test-Logout {
 
 function Run-AllTests {
     Write-Host "`n=== TELEGRAM ROUTES DETAILED SMOKE TESTS ===" -ForegroundColor Yellow
+    Write-Host "Using API ID: $envApiId" -ForegroundColor Cyan
+    Write-Host "Using Phone: $envPhone" -ForegroundColor Cyan
+
     if (-not (Setup-TestUser)) { Write-Error "Cannot setup user"; return }
     Start-Sleep -Seconds 1
     if (-not (Ensure-TestAccount)) { Write-Error "Cannot ensure account"; return }
