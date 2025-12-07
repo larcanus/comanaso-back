@@ -14,6 +14,9 @@ import logging
 from app.config import settings
 from app.database import engine, Base, init_db
 
+# Добавляем импорт TelethonManager
+from app.utils.telethon_client import TelethonManager
+
 # Импорт роутеров
 from app.api.routes import auth, accounts, dev
 
@@ -52,10 +55,23 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Failed to initialize database: {e}")
         raise
 
+    # Создаём единый TelethonManager и сохраняем в state (для зависимостей)
+    app.state.telethon_manager = TelethonManager()
+    logger.info("✅ TelethonManager initialized and stored in app.state")
+
     yield
 
     # Shutdown
     logger.info("Shutting down Comanaso API...")
+    # Корректно отключаем всех Telethon клиентов
+    tm = getattr(app.state, "telethon_manager", None)
+    if tm:
+        try:
+            await tm.disconnect_all()
+            logger.info("✅ TelethonManager disconnected all clients")
+        except Exception as e:
+            logger.warning(f"TelethonManager disconnect_all raised an error: {e}")
+
     await engine.dispose()
     logger.info("✅ Database connections closed")
 

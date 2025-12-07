@@ -7,16 +7,19 @@ FastAPI dependencies для аутентификации и авторизаци
 - get_current_user: Зависимость для получения текущего пользователя из JWT токена
 - CurrentUser: Типизированная зависимость для удобства использования в роутах
 """
-from typing import Annotated
+from typing import Annotated, Any
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.security.http import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.database import get_db
+from app.models.account import Account
 from app.models.user import User
 from app.utils.jwt import decode_access_token
 from app.services.auth_service import AuthService
+from app.utils.telethon_client import TelethonManager
 
 
 class CustomHTTPBearer(HTTPBearer):
@@ -86,6 +89,45 @@ async def get_current_user(
         )
 
     return user
+
+async def get_account(
+    accountId: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+) -> Account:
+    """
+    Dependency: возвращает Account по accountId и проверяет, что он принадлежит current_user.
+    Возвращает 404 если не найден, 403 если нет прав.
+    """
+    result = await db.execute(select(Account).filter(Account.id == accountId))
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    # Проверяем типичные поля владельца: user_id, owner_id или связанный объект user
+    if getattr(account, "user_id", None) is not None:
+        if account.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    elif getattr(account, "owner_id", None) is not None:
+        if account.owner_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    else:
+        user_obj = getattr(account, "user", None)
+        if user_obj is not None and getattr(user_obj, "id", None) != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    return account
+
+
+def get_telethon_manager(request: Request) -> TelethonManager:
+    """
+    Dependency: возвращает TelethonManager из app.state, создаёт один экземпляр при первом вызове.
+    """
+    tm = getattr(request.app.state, "telethon_manager", None)
+    if tm is None:
+        tm = TelethonManager()
+        request.app.state.telethon_manager = tm
+    return tm
 
 
 # Типизированная зависимость для удобства
