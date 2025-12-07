@@ -123,12 +123,23 @@ function Test-Connect {
     try {
         $resp = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId/connect" -Method Post -Headers $h -Body $body -StatusCodeVariable status
         Show-Response $resp $status
+        # Если в теле есть поле error — дать подсказку
+        if ($resp -and ($resp.error -or $resp.status)) {
+            if ($resp.error -eq "INVALID_API_CREDENTIALS") {
+                Write-Warning "Invalid API credentials detected. Проверьте apiId/apiHash для аккаунта $script:TestAccountId."
+            } elseif ($resp.error -eq "TELETHON_ERROR" -and $resp.message -match "api_id\/api_hash") {
+                Write-Warning "Telethon returned api_id/api_hash error. Проверьте apiId/apiHash в настройках аккаунта."
+            }
+        }
     } catch {
         Write-Error "Connect failed: $($_.Exception.Message)"
         if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
             try {
                 $err = $_.ErrorDetails.Message | ConvertFrom-Json
                 Show-Response $err $_.StatusCode
+                if ($err.error -eq "INVALID_API_CREDENTIALS" -or ($err.error -eq "TELETHON_ERROR" -and $err.message -match "api_id\/api_hash")) {
+                    Write-Warning "Invalid API credentials detected in error response. Проверьте apiId/apiHash для аккаунта $script:TestAccountId."
+                }
             } catch {
                 Write-Host $_.ErrorDetails.Message
             }

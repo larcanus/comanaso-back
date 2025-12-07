@@ -109,6 +109,9 @@ class TelethonManager:
                 return phone_code_hash
             except errors.rpcerrorlist.PhoneNumberInvalidError:
                 raise PhoneNumberInvalid("phone number invalid")
+            except errors.rpcerrorlist.ApiIdInvalidError:
+                # Явная маппинг-ошибка для неверных api_id / api_hash
+                raise InvalidApiCredentials("invalid api_id/api_hash")
             except errors.FloodWaitError as e:
                 raise FloodWait(int(getattr(e, "seconds", 0)))
             except Exception as e:

@@ -13,7 +13,11 @@ from app.api.dependencies import (
     get_account,
     get_telethon_manager,
 )
-from app.utils.telethon_client import TelethonManager, TelethonManagerError
+from app.utils.telethon_client import (
+    TelethonManager,
+    TelethonManagerError,
+    InvalidApiCredentials,
+)
 from app.services.telegram_service import TelegramService
 from app.models.account import Account
 
@@ -32,7 +36,12 @@ async def connect_account(
     # account coming from dependency должен соответствовать accountId
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
-    return await service.connect(db, current_user.id, account.id)
+    try:
+        return await service.connect(db, current_user.id, account.id)
+    except InvalidApiCredentials as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)})
+    except TelethonManagerError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
 
 
 @router.post("/accounts/{accountId}/verify-code")
@@ -49,7 +58,12 @@ async def verify_code(
     service = TelegramService(tm)
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
-    return await service.verify_code(db, current_user.id, account.id, phone, code, phoneCodeHash)
+    try:
+        return await service.verify_code(db, current_user.id, account.id, phone, code, phoneCodeHash)
+    except InvalidApiCredentials as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)})
+    except TelethonManagerError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
 
 
 @router.post("/accounts/{accountId}/verify-password")
@@ -64,7 +78,12 @@ async def verify_password(
     service = TelegramService(tm)
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
-    return await service.verify_password(db, current_user.id, account.id, password)
+    try:
+        return await service.verify_password(db, current_user.id, account.id, password)
+    except InvalidApiCredentials as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)})
+    except TelethonManagerError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
 
 
 @router.post("/accounts/{accountId}/disconnect")
@@ -78,7 +97,12 @@ async def disconnect_account(
     service = TelegramService(tm)
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
-    return await service.disconnect(db, current_user.id, account.id)
+    try:
+        return await service.disconnect(db, current_user.id, account.id)
+    except InvalidApiCredentials as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)})
+    except TelethonManagerError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
 
 
 @router.post("/accounts/{accountId}/logout")
@@ -92,7 +116,12 @@ async def logout_account(
     service = TelegramService(tm)
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
-    return await service.logout(db, current_user.id, account.id)
+    try:
+        return await service.logout(db, current_user.id, account.id)
+    except InvalidApiCredentials as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)})
+    except TelethonManagerError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
 
 
 @router.get("/accounts/{accountId}/dialogs")
@@ -107,7 +136,12 @@ async def get_dialogs(
     service = TelegramService(tm)
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
-    return await service.get_dialogs(db, current_user.id, account.id, limit=limit)
+    try:
+        return await service.get_dialogs(db, current_user.id, account.id, limit=limit)
+    except InvalidApiCredentials as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)})
+    except TelethonManagerError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
 
 
 @router.get("/accounts/{accountId}/folders")
@@ -123,6 +157,8 @@ async def get_folders(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
     try:
         return await tm.get_folders(account.id)
+    except InvalidApiCredentials as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)})
     except TelethonManagerError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -141,4 +177,9 @@ async def get_common_data(
     service = TelegramService(tm)
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
-    return await service.get_common_data(db, current_user.id, account.id)
+    try:
+        return await service.get_common_data(db, current_user.id, account.id)
+    except InvalidApiCredentials as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)})
+    except TelethonManagerError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
