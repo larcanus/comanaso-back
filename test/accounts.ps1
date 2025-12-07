@@ -783,21 +783,21 @@ function Show-Menu {
     Write-Host "`n=== COMANASO ACCOUNTS API TESTER ===" -ForegroundColor Yellow
     Write-Host "Auth Status: $(if ($script:AuthToken) { 'Logged in' } else { 'Not logged in' })" -ForegroundColor $(if ($script:AuthToken) { 'Green' } else { 'Red' })
     Write-Host ""
-    Write-Host "1. Login (get auth token)"
-    Write-Host "2. Cleanup Test Accounts"
-    Write-Host "3. Get Accounts List"
-    Write-Host "4. Create Account"
-    Write-Host "5. Create Duplicate Account (negative test)"
-    Write-Host "6. Create Account with Invalid Phone (negative test)"
-    Write-Host "7. Update Account"
-    Write-Host "8. Update Non-Existent Account (negative test)"
-    Write-Host "9. Delete Account"
-    Write-Host "10. Delete Non-Existent Account (negative test)"
-    Write-Host "11. Get Accounts Without Auth (401 test)"
-    Write-Host "12. Create Account Without Auth (401 test)"
-    Write-Host "13. Update Account Without Auth (401 test)"
-    Write-Host "14. Delete Account Without Auth (401 test)"
-    Write-Host "15. Run All Tests"
+    Write-Host "1. Run All Tests"
+    Write-Host "2. Login (get auth token)"
+    Write-Host "3. Cleanup Test Accounts"
+    Write-Host "4. Get Accounts List"
+    Write-Host "5. Create Account"
+    Write-Host "6. Create Duplicate Account (negative test)"
+    Write-Host "7. Create Account with Invalid Phone (negative test)"
+    Write-Host "8. Update Account"
+    Write-Host "9. Update Non-Existent Account (negative test)"
+    Write-Host "10. Delete Account"
+    Write-Host "11. Delete Non-Existent Account (negative test)"
+    Write-Host "12. Get Accounts Without Auth (401 test)"
+    Write-Host "13. Create Account Without Auth (401 test)"
+    Write-Host "14. Update Account Without Auth (401 test)"
+    Write-Host "15. Delete Account Without Auth (401 test)"
     Write-Host "16. Cleanup Test Users"
     Write-Host "0. Exit"
     Write-Host ""
@@ -808,21 +808,21 @@ if ($args.Count -eq 0) {
         Show-Menu
         $choice = Read-Host "Select option"
         switch ($choice) {
-            "1" { Test-Login }
-            "2" { Cleanup-TestAccounts }
-            "3" { Test-GetAccounts }
-            "4" { Test-CreateAccount }
-            "5" { Test-CreateDuplicateAccount }
-            "6" { Test-CreateAccountInvalidPhone }
-            "7" { Test-UpdateAccount }
-            "8" { Test-UpdateNonExistentAccount }
-            "9" { Test-DeleteAccount }
-            "10" { Test-DeleteNonExistentAccount }
-            "11" { Test-GetAccountsWithoutAuth }
-            "12" { Test-CreateAccountWithoutAuth }
-            "13" { Test-UpdateAccountWithoutAuth }
-            "14" { Test-DeleteAccountWithoutAuth }
-            "15" { Run-AllTests }
+            "1" { Run-AllTests }
+            "2" { Test-Login }
+            "3" { Cleanup-TestAccounts }
+            "4" { Test-GetAccounts }
+            "5" { Test-CreateAccount }
+            "6" { Test-CreateDuplicateAccount }
+            "7" { Test-CreateAccountInvalidPhone }
+            "8" { Test-UpdateAccount }
+            "9" { Test-UpdateNonExistentAccount }
+            "10" { Test-DeleteAccount }
+            "11" { Test-DeleteNonExistentAccount }
+            "12" { Test-GetAccountsWithoutAuth }
+            "13" { Test-CreateAccountWithoutAuth }
+            "14" { Test-UpdateAccountWithoutAuth }
+            "15" { Test-DeleteAccountWithoutAuth }
             "16" { Cleanup-TestUsers }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
