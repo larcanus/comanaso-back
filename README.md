@@ -98,6 +98,26 @@ Response 401:
 }
 ```
 
+### 1.4 Выход из системы (logout)
+
+```http
+POST /api/auth/logout
+Authorization: Bearer {token}
+Content-Type: application/json
+
+Response 200:
+{
+  "status": "success",
+  "message": "Вы успешно вышли из системы"
+}
+
+Response 401:
+{
+  "error": "UNAUTHORIZED",
+  "message": "Токен недействителен или отсутствует"
+}
+```
+
 ---
 
 ## 2. TELEGRAM ACCOUNTS
@@ -638,6 +658,15 @@ function getAuthHeaders() {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : ''
     };
+}
+
+// Выход из системы (разлогин пользователя)
+export async function logout() {
+    const result = await apiRequest('/auth/logout', {
+        method: 'POST'
+    });
+    localStorage.removeItem('authToken');
+    return result;
 }
 
 async function apiRequest(endpoint, options = {}) {
