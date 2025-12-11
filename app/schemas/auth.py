@@ -4,7 +4,6 @@ Pydantic схемы для аутентификации.
 """
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
-import re
 
 
 class UserRegister(BaseModel):
@@ -135,6 +134,34 @@ class TokenVerifyResponse(BaseModel):
                     "id": 1,
                     "login": "user123"
                 }
+            }
+        }
+    }
+
+
+class LogoutResponse(BaseModel):
+    """
+    Схема ответа при выходе из системы.
+
+    Attributes:
+        status: Статус операции
+        message: Сообщение о результате
+    """
+
+    status: str = Field(
+        ...,
+        description="Статус операции"
+    )
+    message: str = Field(
+        ...,
+        description="Сообщение о результате"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "status": "success",
+                "message": "Вы успешно вышли из системы"
             }
         }
     }

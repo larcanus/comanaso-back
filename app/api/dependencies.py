@@ -70,7 +70,7 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
-                "error": "INVALID_TOKEN",
+                "error": "UNAUTHORIZED",
                 "message": "Токен недействителен или истек"
             },
             headers={"WWW-Authenticate": "Bearer"},

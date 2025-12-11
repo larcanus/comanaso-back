@@ -2,16 +2,17 @@
 API роутер для управления авторизацией юзеров.
 """
 from typing import Annotated
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.auth import (
     UserRegister, UserLogin, AuthResponse, TokenVerifyResponse,
-    UserData, UserResponse
+    UserData, UserResponse, LogoutResponse
 )
 from app.services.auth_service import AuthService
-from app.api.dependencies import CurrentUser
+from app.api.dependencies import CurrentUser, get_current_user, security
 
 
 router = APIRouter(tags=["Authentication"])
@@ -159,19 +160,83 @@ async def login(
         }
     }
 )
-async def verify_token(current_user: CurrentUser) -> TokenVerifyResponse:
+async def verify_token(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    db: Annotated[AsyncSession, Depends(get_db)]
+) -> TokenVerifyResponse:
     """
     Проверка валидности JWT токена.
 
     Требует JWT токен в заголовке Authorization.
     """
+    try:
+        user = await get_current_user(credentials, db)
+    except HTTPException as e:
+        # Переопределяем UNAUTHORIZED на INVALID_TOKEN для endpoint /verify
+        if e.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": "INVALID_TOKEN",
+                    "message": "Токен недействителен или истек"
+                },
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        raise
+
     return TokenVerifyResponse(
         valid=True,
         user=UserData(
-            id=current_user.id,
-            login=current_user.email if current_user.email else current_user.username,
-            createdAt=current_user.created_at.isoformat() + "Z"
+            id=user.id,
+            login=user.email if user.email else user.username,
+            createdAt=user.created_at.isoformat() + "Z"
         )
+    )
+
+
+@router.post(
+    "/logout",
+    response_model=LogoutResponse,
+    summary="Выход из системы",
+    description="Выход пользователя из системы (инвалидация токена)",
+    responses={
+        200: {
+            "description": "Успешный выход",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "success",
+                        "message": "Вы успешно вышли из системы"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Токен невалиден",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "UNAUTHORIZED",
+                        "message": "Токен недействителен или отсутствует"
+                    }
+                }
+            }
+        }
+    }
+)
+async def logout(current_user: CurrentUser) -> LogoutResponse:
+    """
+    Выход из системы.
+
+    Требует JWT токен в заголовке Authorization.
+
+    **Примечание**: После logout клиент должен удалить токен из localStorage.
+    Токен остается валидным до истечения срока действия (stateless JWT).
+    Для полной инвалидации требуется blacklist механизм.
+    """
+    return LogoutResponse(
+        status="success",
+        message="Вы успешно вышли из системы"
     )
 
 
