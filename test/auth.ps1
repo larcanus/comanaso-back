@@ -85,6 +85,81 @@ function Test-GetMe {
     }
 }
 
+function Test-Logout {
+    param($Token)
+    Write-Info "`n=== TEST: Logout User ==="
+    if (-not $Token) { Write-Error "✗ No token provided"; return $null }
+
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer $Token"
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/logout" -Method Post -Headers $authHeaders -StatusCodeVariable statusCode
+        Write-Success "✓ Logout successful"
+        Show-Response $response $statusCode
+
+        # Проверка структуры ответа
+        if ($response.status -eq "success" -and $response.message) {
+            Write-Success "✓ Response structure is correct"
+        } else {
+            Write-Error "✗ Response structure is incorrect"
+        }
+
+        return $response
+    }
+    catch {
+        Write-Error "✗ Logout failed"
+        Write-Host $_.Exception.Message
+        return $null
+    }
+}
+
+function Test-LogoutInvalidToken {
+    Write-Info "`n=== TEST: Logout with Invalid Token ==="
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer invalid_token_xyz123"
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/logout" -Method Post -Headers $authHeaders -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected invalid token"
+        $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Info "Error response:"
+        $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+        $errorCode = if ($errorDetails.detail -and $errorDetails.detail.error) {
+            $errorDetails.detail.error
+        } elseif ($errorDetails.error) {
+            $errorDetails.error
+        } else {
+            $null
+        }
+
+        if ($errorCode -eq "UNAUTHORIZED") {
+            Write-Success "✓ Error code is correct (UNAUTHORIZED)"
+        } else {
+            Write-Error "✗ Expected error code UNAUTHORIZED, got: $errorCode"
+        }
+    }
+}
+
+function Test-LogoutWithoutToken {
+    Write-Info "`n=== TEST: Logout Without Token ==="
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/logout" -Method Post -Headers $HEADERS -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected request without token"
+        Write-Host "Error: $($_.Exception.Message)"
+    }
+}
+
 function Test-VerifyToken {
     param($Token)
     Write-Info "`n=== TEST: Verify Valid Token ==="
@@ -560,6 +635,14 @@ function Run-AllTests {
     Test-VerifyInvalidToken; Start-Sleep -Seconds 1
     Test-VerifyWithoutToken; Start-Sleep -Seconds 1
 
+    Write-Host "`n=== LOGOUT TESTS ===" -ForegroundColor Yellow
+    # Тесты logout
+    if ($token) {
+        Test-Logout -Token $token; Start-Sleep -Seconds 1
+    }
+    Test-LogoutInvalidToken; Start-Sleep -Seconds 1
+    Test-LogoutWithoutToken; Start-Sleep -Seconds 1
+
     Write-Host "`n=== DUPLICATE & EDGE CASES ===" -ForegroundColor Yellow
     # Дубликаты и граничные случаи
     Test-DuplicateLogin; Start-Sleep -Seconds 1
@@ -608,6 +691,11 @@ function Show-Menu {
     Write-Host "17. Test Verify Invalid Token"
     Write-Host "18. Test Verify Without Token"
     Write-Host ""
+    Write-Host "LOGOUT TESTS:"
+    Write-Host "24. Test Logout (requires token)"
+    Write-Host "25. Test Logout Invalid Token"
+    Write-Host "26. Test Logout Without Token"
+    Write-Host ""
     Write-Host "OTHER TESTS:"
     Write-Host "19. Test Duplicate Login (400)"
     Write-Host "20. Test Invalid JSON"
@@ -647,6 +735,9 @@ if ($args.Count -eq 0) {
             "21" { Test-RegisterBoundaryLogin }
             "22" { Test-RegisterBoundaryPassword }
             "23" { Cleanup-TestUsers }
+            "24" { if (-not $token) { $token = Read-Host "Enter token" }; Test-Logout -Token $token }
+            "25" { Test-LogoutInvalidToken }
+            "26" { Test-LogoutWithoutToken }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
         }
