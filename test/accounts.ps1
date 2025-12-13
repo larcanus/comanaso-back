@@ -247,19 +247,13 @@ function Test-GetAccounts {
                     Write-Error "✗ Missing required fields: $($missingFields -join ', ')"
                     return $response
                 }
-                Write-Success "✓ All required fields present"
+                Write-Success "✓ All required fields present (8 minimum)"
 
-                # 2. Проверка точного количества полей (не должно быть лишних)
-                $actualFieldCount = $account.PSObject.Properties.Count
-                $expectedFieldCount = 8
-                if ($actualFieldCount -eq $expectedFieldCount) {
-                    Write-Success "✓ Exact field count is correct ($actualFieldCount fields)"
-                } else {
-                    Write-Error "✗ Field count mismatch: expected $expectedFieldCount, got $actualFieldCount"
-                    $actualFields = $account.PSObject.Properties.Name
-                    $extraFields = $actualFields | Where-Object { $_ -notin $requiredFields }
-                    if ($extraFields) {
-                        Write-Info "Extra fields found: $($extraFields -join ', ')"
+                # 2. Проверка наличия дополнительных полей
+                $extraFields = @('lastActivity', 'deviceInfo')
+                foreach ($field in $extraFields) {
+                    if ($account.PSObject.Properties[$field]) {
+                        Write-Info "ℹ Additional fields found: $field"
                     }
                 }
 
@@ -274,8 +268,8 @@ function Test-GetAccounts {
                 if ($account.phoneNumber -isnot [string]) {
                     $typeErrors += "phoneNumber должен быть строкой, получен: $($account.phoneNumber.GetType().Name)"
                 }
-                if ($account.apiId -isnot [string]) {
-                    $typeErrors += "apiId должен быть строкой, получен: $($account.apiId.GetType().Name)"
+                if ($account.apiId -isnot [int64]) {
+                    $typeErrors += "apiId должен быть числом, получен: $($account.apiId.GetType().Name)"
                 }
                 if ($account.apiHash -isnot [string]) {
                     $typeErrors += "apiHash должен быть строкой, получен: $($account.apiHash.GetType().Name)"

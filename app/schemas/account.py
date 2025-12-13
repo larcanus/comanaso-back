@@ -89,15 +89,30 @@ class AccountUpdate(AccountBase):
 
 
 class AccountResponse(AccountBase):
-    """Схема ответа со списком аккаунтов (краткая информация)."""
+    """Схема ответа со списком аккаунтов (полная информация)."""
     id: int
     phone: str = Field(..., serialization_alias="phoneNumber")
+    api_id: int = Field(..., serialization_alias="apiId")
+    api_hash: str = Field(..., serialization_alias="apiHash")
     status: str
-    last_activity: Optional[datetime] = Field(None, serialization_alias="lastActivity")
+    created_at: datetime = Field(..., serialization_alias="createdAt")
+    updated_at: Optional[datetime] = Field(None, serialization_alias="updatedAt")
 
     model_config = {
         "from_attributes": True,
-        "populate_by_name": True
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "example": {
+                "id": 1,
+                "name": "Рабочий аккаунт",
+                "phoneNumber": "+79991234567",
+                "apiId": "12345678",
+                "apiHash": "abcdef1234567890abcdef1234567890",
+                "status": "online",
+                "createdAt": "2024-01-15T10:30:00Z",
+                "updatedAt": "2024-01-15T12:45:00Z"
+            }
+        }
     }
 
 

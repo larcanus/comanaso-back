@@ -11,8 +11,7 @@ from app.schemas.account import (
     AccountCreate,
     AccountUpdate,
     AccountResponse,
-    AccountDetailResponse,
-    AccountListResponse
+    AccountDetailResponse
 )
 from app.services.account_service import AccountService
 from app.api.dependencies import CurrentUser
@@ -53,7 +52,7 @@ async def create_account(
 
 @router.get(
     "",
-    response_model=AccountListResponse,
+    response_model=list[AccountResponse],
     summary="Получить список всех аккаунтов"
 )
 async def get_accounts(
@@ -68,7 +67,8 @@ async def get_accounts(
     - **skip**: Количество пропускаемых записей (для пагинации)
     - **limit**: Максимальное количество записей
 
-    Возвращает список аккаунтов с основной информацией.
+    Возвращает массив аккаунтов с полной информацией.
+    Каждый элемент содержит 8 обязательных полей: id, name, phoneNumber, apiId, apiHash, status, createdAt, updatedAt.
     """
     accounts = await AccountService.get_user_accounts(
         db=db,
@@ -77,10 +77,7 @@ async def get_accounts(
         limit=limit
     )
 
-    return AccountListResponse(
-        accounts=[AccountResponse.model_validate(acc) for acc in accounts],
-        total=len(accounts)
-    )
+    return [AccountResponse.model_validate(acc) for acc in accounts]
 
 
 @router.get(
