@@ -77,8 +77,10 @@ class TelethonManager:
 
     def __init__(self):
         self._clients: Dict[int, TelegramClient] = {}
+        self._locks: Dict[int, asyncio.Lock] = {}
         self._phone_code_hashes: Dict[int, str] = {}
         self._password_hints: Dict[int, Optional[str]] = {}
+        self._logger = logger
         logger.info("TelethonManager инициализирован")
 
     def _get_lock(self, account_id: int) -> asyncio.Lock:
@@ -126,7 +128,7 @@ class TelethonManager:
             account_id: ID аккаунта
             phone: Номер телефона в международном формате
         """
-        client = self.clients.get(account_id)
+        client = self._clients.get(account_id)
         if not client:
             raise TelethonManagerError(f"Клиент для аккаунта {account_id} не найден")
 
@@ -155,7 +157,7 @@ class TelethonManager:
             PhoneCodeInvalidError: Неверный код
             ExpiredCodeError: Код истек
         """
-        client = self.clients.get(account_id)
+        client = self._clients.get(account_id)
         if not client:
             raise TelethonManagerError(f"Клиент для аккаунта {account_id} не найден")
 
@@ -198,7 +200,7 @@ class TelethonManager:
         Returns:
             Подсказка для пароля или None
         """
-        client = self.clients.get(account_id)
+        client = self._clients.get(account_id)
         if not client:
             raise TelethonManagerError(f"Клиент для аккаунта {account_id} не найден")
 
@@ -225,7 +227,7 @@ class TelethonManager:
         Raises:
             InvalidPasswordError: Неверный пароль
         """
-        client = self.clients.get(account_id)
+        client = self._clients.get(account_id)
         if not client:
             raise TelethonManagerError(f"Клиент для аккаунта {account_id} не найден")
 
