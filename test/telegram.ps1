@@ -385,9 +385,100 @@ function Run-AllTests {
     Write-Host "   4. Если нужен 2FA - вызвать Test-VerifyPassword с реальным паролем" -ForegroundColor Yellow
 }
 
-# Если запущен без аргументов — выполнить все
+function Show-Menu {
+    Write-Host "`n=== COMANASO TELEGRAM API TESTER ===" -ForegroundColor Yellow
+    Write-Host "Auth Status: $(if ($script:AuthToken) { 'Logged in' } else { 'Not logged in' })" -ForegroundColor $(if ($script:AuthToken) { 'Green' } else { 'Red' })
+    Write-Host "Account ID: $(if ($script:TestAccountId) { $script:TestAccountId } else { 'Not set' })" -ForegroundColor $(if ($script:TestAccountId) { 'Green' } else { 'Red' })
+    Write-Host ""
+    Write-Host "1. Run All Tests"
+    Write-Host "2. Setup Test User (Login/Register)"
+    Write-Host "3. Ensure Test Account Exists"
+    Write-Host "4. Connect to Telegram"
+    Write-Host "5. Verify Code (enter code manually)"
+    Write-Host "6. Verify Password (enter password manually)"
+    Write-Host "7. Disconnect from Telegram"
+    Write-Host "8. Logout from Telegram"
+    Write-Host "9. Cleanup Test Users"
+    Write-Host "0. Exit"
+    Write-Host ""
+}
+
 if ($args.Count -eq 0) {
-    Run-AllTests
+    do {
+        Show-Menu
+        $choice = Read-Host "Select option"
+        switch ($choice) {
+            "1" { Run-AllTests }
+            "2" {
+                if (Setup-TestUser) {
+                    Write-Success "✅ Test user ready"
+                } else {
+                    Write-Error "❌ Failed to setup test user"
+                }
+            }
+            "3" {
+                if (-not $script:AuthToken) {
+                    Write-Error "❌ Please login first (option 2)"
+                } elseif (Ensure-TestAccount) {
+                    Write-Success "✅ Test account ready (id: $script:TestAccountId)"
+                } else {
+                    Write-Error "❌ Failed to ensure test account"
+                }
+            }
+            "4" {
+                if (-not $script:TestAccountId) {
+                    Write-Error "❌ Please ensure test account first (option 3)"
+                } else {
+                    Test-Connect
+                }
+            }
+            "5" {
+                if (-not $script:TestAccountId) {
+                    Write-Error "❌ Please ensure test account first (option 3)"
+                } else {
+                    $code = Read-Host "Enter verification code from Telegram"
+                    if ($code) {
+                        Test-VerifyCode -code $code
+                    } else {
+                        Write-Error "❌ Code cannot be empty"
+                    }
+                }
+            }
+            "6" {
+                if (-not $script:TestAccountId) {
+                    Write-Error "❌ Please ensure test account first (option 3)"
+                } else {
+                    $password = Read-Host "Enter 2FA password" -AsSecureString
+                    $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+                        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($password)
+                    )
+                    if ($plainPassword) {
+                        Test-VerifyPassword -password $plainPassword
+                    } else {
+                        Write-Error "❌ Password cannot be empty"
+                    }
+                }
+            }
+            "7" {
+                if (-not $script:TestAccountId) {
+                    Write-Error "❌ Please ensure test account first (option 3)"
+                } else {
+                    Test-Disconnect
+                }
+            }
+            "8" {
+                if (-not $script:TestAccountId) {
+                    Write-Error "❌ Please ensure test account first (option 3)"
+                } else {
+                    Test-Logout
+                }
+            }
+            "9" { Cleanup-TestUsers }
+            "0" { Write-Host "Exiting..." }
+            default { Write-Host "Invalid option" -ForegroundColor Red }
+        }
+        if ($choice -ne "0") { Read-Host "`nPress Enter to continue" }
+    } while ($choice -ne "0")
 } else {
     Run-AllTests
 }
