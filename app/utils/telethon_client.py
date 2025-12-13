@@ -177,10 +177,10 @@ class TelethonManager:
             return session_string
         except SessionPasswordNeededError:
             logger.info(f"Требуется 2FA для аккаунта {account_id}")
-            raise
+            raise PasswordRequired("2FA password required")
         except PhoneCodeInvalidError:
             logger.warning(f"Неверный код для аккаунта {account_id}")
-            raise
+            raise InvalidCode("Invalid phone code")
         except PhoneCodeExpiredError:
             logger.warning(f"Код истек для аккаунта {account_id}")
             # Очищаем истекший phone_code_hash

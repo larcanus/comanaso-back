@@ -183,6 +183,37 @@ class TelegramService:
             except Exception:
                 logger.debug("Failed to get password hint", exc_info=True)
 
+            return {
+                "status": "password_required",
+                "message": "Требуется 2FA пароль",
+                "passwordHint": password_hint
+            }
+        except InvalidCode:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "INVALID_CODE", "message": "Неверный код подтверждения"}
+            )
+        except ExpiredCodeError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "EXPIRED_CODE", "message": "Код истек, запросите новый"}
+            )
+        except NotConnected:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "NOT_CONNECTED", "message": "Клиент не создан"}
+            )
+        except FloodWait as e:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": e.seconds}
+            )
+        except TelethonManagerError as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"error": "TELETHON_ERROR", "message": str(e)}
+            )
+
             response = {
                 "status": "password_required",
                 "message": "Требуется 2FA пароль"
