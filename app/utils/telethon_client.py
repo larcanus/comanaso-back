@@ -21,40 +21,51 @@ class TelethonManagerError(Exception):
     """Базовое исключение для ошибок TelethonManager"""
     pass
 
+
 class InvalidApiCredentials(TelethonManagerError):
     pass
+
 
 class CodeRequired(TelethonManagerError):
     def __init__(self, phone_code_hash: str):
         super().__init__("code required")
         self.phone_code_hash = phone_code_hash
 
+
 class PasswordRequired(TelethonManagerError):
     pass
+
 
 class FloodWait(TelethonManagerError):
     def __init__(self, seconds: int):
         super().__init__(f"flood wait {seconds} seconds")
         self.seconds = seconds
 
+
 class AlreadyConnected(TelethonManagerError):
     pass
+
 
 class NotConnected(TelethonManagerError):
     pass
 
+
 class InvalidCode(TelethonManagerError):
     pass
+
 
 class ExpiredCode(TelethonManagerError):
     pass
 
+
 class PhoneNumberInvalid(TelethonManagerError):
     pass
+
 
 class InvalidPasswordError(TelethonManagerError):
     """Неверный 2FA пароль"""
     pass
+
 
 class ExpiredCodeError(TelethonManagerError):
     """Код подтверждения истек"""
@@ -76,11 +87,11 @@ class TelethonManager:
         return self._locks[account_id]
 
     async def create_client(
-        self,
-        account_id: int,
-        api_id: int,
-        api_hash: str,
-        session_string: Optional[str] = None,
+            self,
+            account_id: int,
+            api_id: int,
+            api_hash: str,
+            session_string: Optional[str] = None,
     ) -> TelegramClient:
         """
         Создаёт и подключает TelegramClient (если ещё не создан).
@@ -150,7 +161,8 @@ class TelethonManager:
 
         phone_code_hash = self._phone_code_hashes.get(account_id)
         if not phone_code_hash:
-            raise TelethonManagerError(f"phone_code_hash не найден для аккаунта {account_id}. Вызовите send_code сначала")
+            raise TelethonManagerError(
+                f"phone_code_hash не найден для аккаунта {account_id}. Вызовите send_code сначала")
 
         try:
             await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
@@ -352,7 +364,8 @@ class TelethonManager:
                         await client.disconnect()
                     except Exception as e:
                         # Не выбрасываем наружу — собираем и логируем
-                        self._logger.debug("disconnect_all: error disconnecting account %s: %s", account_id, type(e).__name__)
+                        self._logger.debug("disconnect_all: error disconnecting account %s: %s", account_id,
+                                           type(e).__name__)
                         errors.append((account_id, str(e)))
                     finally:
                         # Удаляем клиент из словаря независимо от результата
