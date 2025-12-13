@@ -3,11 +3,19 @@ import logging
 from typing import Optional, Dict, Any, List
 
 from telethon import TelegramClient
+from telethon.errors import (
+    SessionPasswordNeededError,
+    PhoneCodeInvalidError,
+    PhoneCodeExpiredError,
+    ApiIdInvalidError,
+    PasswordHashInvalidError
+)
 from telethon.sessions import StringSession
 from telethon import errors
 
 # Exceptions для маппинга в сервис/роутеры
 class TelethonManagerError(Exception):
+    """Базовое исключение для ошибок TelethonManager"""
     pass
 
 class InvalidApiCredentials(TelethonManagerError):
@@ -41,17 +49,23 @@ class ExpiredCode(TelethonManagerError):
 class PhoneNumberInvalid(TelethonManagerError):
     pass
 
+class InvalidPasswordError(TelethonManagerError):
+    """Неверный 2FA пароль"""
+    pass
+
+class ExpiredCodeError(TelethonManagerError):
+    """Код подтверждения истек"""
+    pass
+
 
 class TelethonManager:
-    """
-    Управляет Telethon clients в памяти по account_id.
-    Методы возвращают данные или выбрасывают специализированные исключения.
-    `session_string` не логируется в менеджере.
-    """
-    def __init__(self) -> None:
-        self._clients: Dict[int, TelegramClient] = {}
-        self._locks: Dict[int, asyncio.Lock] = {}
-        self._logger = logging.getLogger("telethon_manager")
+    """Менеджер для управления Telethon клиентами"""
+
+    def __init__(self):
+        self.clients: dict[int, TelegramClient] = {}
+        self._phone_code_hashes: dict[int, str] = {}  # Хранилище phone_code_hash по account_id
+        self._locks: dict[int, asyncio.Lock] = {}
+        logger.info("TelethonManager инициализирован")
 
     def _get_lock(self, account_id: int) -> asyncio.Lock:
         if account_id not in self._locks:
@@ -90,102 +104,131 @@ class TelethonManager:
                 self._logger.debug("create_client error: %s", type(e).__name__)
                 raise TelethonManagerError(str(e))
 
-    async def send_code(self, account_id: int, phone: str) -> str:
+    async def send_code(self, account_id: int, phone: str) -> None:
         """
-        Отправляет код на номер. Возвращает phone_code_hash (нужен для sign_in_code).
+        Отправить код подтверждения на телефон и сохранить phone_code_hash
+
+        Args:
+            account_id: ID аккаунта
+            phone: Номер телефона в международном формате
         """
-        lock = self._get_lock(account_id)
-        async with lock:
-            client = self._clients.get(account_id)
-            if not client:
-                raise NotConnected("client not created; call create_client first")
+        client = self.clients.get(account_id)
+        if not client:
+            raise TelethonManagerError(f"Клиент для аккаунта {account_id} не найден")
 
-            try:
-                sent = await client.send_code_request(phone)
-                phone_code_hash = getattr(sent, "phone_code_hash", None)
-                if not phone_code_hash:
-                    # Некоторое поведение Telethon: вернуть объект с полем
-                    raise TelethonManagerError("no phone_code_hash returned")
-                return phone_code_hash
-            except errors.rpcerrorlist.PhoneNumberInvalidError:
-                raise PhoneNumberInvalid("phone number invalid")
-            except errors.rpcerrorlist.ApiIdInvalidError:
-                # Явная маппинг-ошибка для неверных api_id / api_hash
-                raise InvalidApiCredentials("invalid api_id/api_hash")
-            except errors.FloodWaitError as e:
-                raise FloodWait(int(getattr(e, "seconds", 0)))
-            except Exception as e:
-                self._logger.debug("send_code error: %s", type(e).__name__)
-                raise TelethonManagerError(str(e))
+        try:
+            result = await client.send_code_request(phone)
+            self._phone_code_hashes[account_id] = result.phone_code_hash
+            logger.info(f"Код отправлен для аккаунта {account_id}, phone_code_hash сохранен")
+        except Exception as e:
+            logger.error(f"Ошибка отправки кода для аккаунта {account_id}: {e}")
+            raise TelethonManagerError(f"Не удалось отправить код: {str(e)}")
 
-    async def sign_in_code(
-        self,
-        account_id: int,
-        phone: str,
-        code: str,
-        phone_code_hash: Optional[str] = None,
-    ) -> str:
+    async def sign_in_code(self, account_id: int, phone: str, code: str) -> str:
         """
-        Подтверждает код. При успешном входе возвращает session_string (строго для сохранения в БД).
-        Может выбрасывать PasswordRequired, InvalidCode, ExpiredCode и другие.
+        Войти используя код подтверждения
+
+        Args:
+            account_id: ID аккаунта
+            phone: Номер телефона
+            code: Код подтверждения из SMS
+
+        Returns:
+            session_string для сохранения в БД
+
+        Raises:
+            SessionPasswordNeededError: Требуется 2FA пароль
+            PhoneCodeInvalidError: Неверный код
+            ExpiredCodeError: Код истек
         """
-        lock = self._get_lock(account_id)
-        async with lock:
-            client = self._clients.get(account_id)
-            if not client:
-                raise NotConnected("client not created; call create_client first")
+        client = self.clients.get(account_id)
+        if not client:
+            raise TelethonManagerError(f"Клиент для аккаунта {account_id} не найден")
 
-            try:
-                # Telethon: phone_code_hash можно передать именованно
-                if phone_code_hash:
-                    await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
-                else:
-                    await client.sign_in(phone=phone, code=code)
+        phone_code_hash = self._phone_code_hashes.get(account_id)
+        if not phone_code_hash:
+            raise TelethonManagerError(f"phone_code_hash не найден для аккаунта {account_id}. Вызовите send_code сначала")
 
-                # Получаем session_string для сохранения
-                session_obj = client.session
-                if isinstance(session_obj, StringSession):
-                    session_string = session_obj.save()
-                else:
-                    # попытка получить строку у сессии (на случай другой реализации)
-                    session_string = StringSession(session=client.session).save() if hasattr(StringSession, "save") else None
+        try:
+            await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
+            session_string = client.session.save()
 
-                return session_string  # не логировать
-            except errors.SessionPasswordNeededError:
-                raise PasswordRequired("2FA password required")
-            except errors.rpcerrorlist.PhoneCodeInvalidError:
-                raise InvalidCode("invalid code")
-            except errors.rpcerrorlist.PhoneCodeExpiredError:
-                raise ExpiredCode("code expired")
-            except errors.FloodWaitError as e:
-                raise FloodWait(int(getattr(e, "seconds", 0)))
-            except Exception as e:
-                self._logger.debug("sign_in_code error: %s", type(e).__name__)
-                raise TelethonManagerError(str(e))
+            # Очищаем phone_code_hash после успешного входа
+            self._phone_code_hashes.pop(account_id, None)
+
+            logger.info(f"Успешный вход для аккаунта {account_id}")
+            return session_string
+        except SessionPasswordNeededError:
+            logger.info(f"Требуется 2FA для аккаунта {account_id}")
+            raise
+        except PhoneCodeInvalidError:
+            logger.warning(f"Неверный код для аккаунта {account_id}")
+            raise
+        except PhoneCodeExpiredError:
+            logger.warning(f"Код истек для аккаунта {account_id}")
+            # Очищаем истекший phone_code_hash
+            self._phone_code_hashes.pop(account_id, None)
+            raise ExpiredCodeError("Код истек, запросите новый")
+        except Exception as e:
+            logger.error(f"Ошибка входа для аккаунта {account_id}: {e}")
+            raise TelethonManagerError(f"Не удалось войти: {str(e)}")
+
+    async def get_password_hint(self, account_id: int) -> Optional[str]:
+        """
+        Получить подсказку для 2FA пароля
+
+        Args:
+            account_id: ID аккаунта
+
+        Returns:
+            Подсказка для пароля или None
+        """
+        client = self.clients.get(account_id)
+        if not client:
+            raise TelethonManagerError(f"Клиент для аккаунта {account_id} не найден")
+
+        try:
+            password_info = await client.get_password()
+            hint = password_info.hint if password_info else None
+            logger.info(f"Password hint для аккаунта {account_id}: {hint or 'отсутствует'}")
+            return hint
+        except Exception as e:
+            logger.error(f"Ошибка получения password hint для аккаунта {account_id}: {e}")
+            return None
 
     async def sign_in_password(self, account_id: int, password: str) -> str:
         """
-        Завершает 2FA вводом пароля. Возвращает session_string.
-        """
-        lock = self._get_lock(account_id)
-        async with lock:
-            client = self._clients.get(account_id)
-            if not client:
-                raise NotConnected("client not created; call create_client first")
+        Войти используя 2FA пароль
 
-            try:
-                await client.sign_in(password=password)
-                session_obj = client.session
-                if isinstance(session_obj, StringSession):
-                    session_string = session_obj.save()
-                else:
-                    session_string = StringSession(session=client.session).save() if hasattr(StringSession, "save") else None
-                return session_string
-            except errors.FloodWaitError as e:
-                raise FloodWait(int(getattr(e, "seconds", 0)))
-            except Exception as e:
-                self._logger.debug("sign_in_password error: %s", type(e).__name__)
-                raise TelethonManagerError(str(e))
+        Args:
+            account_id: ID аккаунта
+            password: 2FA пароль
+
+        Returns:
+            session_string для сохранения в БД
+
+        Raises:
+            InvalidPasswordError: Неверный пароль
+        """
+        client = self.clients.get(account_id)
+        if not client:
+            raise TelethonManagerError(f"Клиент для аккаунта {account_id} не найден")
+
+        try:
+            await client.sign_in(password=password)
+            session_string = client.session.save()
+
+            # Очищаем phone_code_hash после успешного входа
+            self._phone_code_hashes.pop(account_id, None)
+
+            logger.info(f"Успешный вход с 2FA для аккаунта {account_id}")
+            return session_string
+        except PasswordHashInvalidError:
+            logger.warning(f"Неверный пароль для аккаунта {account_id}")
+            raise InvalidPasswordError("Неверный пароль")
+        except Exception as e:
+            logger.error(f"Ошибка входа с 2FA для аккаунта {account_id}: {e}")
+            raise TelethonManagerError(f"Не удалось войти с паролем: {str(e)}")
 
     async def disconnect(self, account_id: int) -> None:
         """
@@ -302,7 +345,7 @@ class TelethonManager:
             try:
                 async with lock:
                     try:
-                        # Пытаемся корректно отключить клиент
+                        # Пытаемся корректно отключить кли
                         await client.disconnect()
                     except Exception as e:
                         # Не выбрасываем наружу — собираем и логируем

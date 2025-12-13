@@ -20,18 +20,27 @@ from app.utils.telethon_client import (
 )
 from app.services.telegram_service import TelegramService
 from app.models.account import Account
+from app.schemas.telegram_connection import (
+    ConnectResponse,
+    VerifyCodeRequest,
+    VerifyCodeResponse,
+    VerifyPasswordRequest,
+    VerifyPasswordResponse,
+    DisconnectResponse,
+    LogoutResponse,
+)
 
 router = APIRouter()
 
 
-@router.post("/accounts/{accountId}/connect")
+@router.post("/accounts/{accountId}/connect", response_model=ConnectResponse)
 async def connect_account(
     accountId: int,
     db: AsyncSession = Depends(get_db),
     current_user: Any = Depends(get_current_user),
     account: Account = Depends(get_account),
     tm: TelethonManager = Depends(get_telethon_manager),
-) -> Any:
+) -> ConnectResponse:
     service = TelegramService(tm)
     # account coming from dependency должен соответствовать accountId
     if account.id != accountId:
@@ -44,56 +53,54 @@ async def connect_account(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
 
 
-@router.post("/accounts/{accountId}/verify-code")
+@router.post("/accounts/{accountId}/verify-code", response_model=VerifyCodeResponse)
 async def verify_code(
     accountId: int,
-    phone: str = Body(...),
-    code: str = Body(...),
-    phoneCodeHash: Optional[str] = Body(None),
+    request: VerifyCodeRequest,
     db: AsyncSession = Depends(get_db),
     current_user: Any = Depends(get_current_user),
     account: Account = Depends(get_account),
     tm: TelethonManager = Depends(get_telethon_manager),
-) -> Any:
+) -> VerifyCodeResponse:
     service = TelegramService(tm)
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
     try:
-        return await service.verify_code(db, current_user.id, account.id, phone, code, phoneCodeHash)
+        return await service.verify_code(db, current_user.id, account.id, request.code)
     except InvalidApiCredentials as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)})
     except TelethonManagerError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
 
 
-@router.post("/accounts/{accountId}/verify-password")
+@router.post("/accounts/{accountId}/verify-password", response_model=VerifyPasswordResponse)
 async def verify_password(
     accountId: int,
-    password: str = Body(...),
+    request: VerifyPasswordRequest,
     db: AsyncSession = Depends(get_db),
     current_user: Any = Depends(get_current_user),
     account: Account = Depends(get_account),
     tm: TelethonManager = Depends(get_telethon_manager),
-) -> Any:
+) -> VerifyPasswordResponse:
     service = TelegramService(tm)
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
     try:
-        return await service.verify_password(db, current_user.id, account.id, password)
+        return await service.verify_password(db, current_user.id, account.id, request.password)
     except InvalidApiCredentials as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)})
     except TelethonManagerError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
 
 
-@router.post("/accounts/{accountId}/disconnect")
+@router.post("/accounts/{accountId}/disconnect", response_model=DisconnectResponse)
 async def disconnect_account(
     accountId: int,
     db: AsyncSession = Depends(get_db),
     current_user: Any = Depends(get_current_user),
     account: Account = Depends(get_account),
     tm: TelethonManager = Depends(get_telethon_manager),
-) -> Any:
+) -> DisconnectResponse:
     service = TelegramService(tm)
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
@@ -105,14 +112,14 @@ async def disconnect_account(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"error": "TELETHON_ERROR", "message": str(e)})
 
 
-@router.post("/accounts/{accountId}/logout")
+@router.post("/accounts/{accountId}/logout", response_model=LogoutResponse)
 async def logout_account(
     accountId: int,
     db: AsyncSession = Depends(get_db),
     current_user: Any = Depends(get_current_user),
     account: Account = Depends(get_account),
     tm: TelethonManager = Depends(get_telethon_manager),
-) -> Any:
+) -> LogoutResponse:
     service = TelegramService(tm)
     if account.id != accountId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")

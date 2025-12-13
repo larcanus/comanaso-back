@@ -17,7 +17,8 @@ from app.utils.telethon_client import (
     AlreadyConnected,
     NotConnected,
     InvalidCode,
-    ExpiredCode,
+    InvalidPasswordError,
+    ExpiredCodeError,
     PhoneNumberInvalid,
     TelethonManagerError,
 )
@@ -75,7 +76,7 @@ class TelegramService:
         - пометить connecting
         - создать/подключить клиент
         - если авторизован -> вернуть online
-        - иначе -> отправить код и вернуть code_required + phoneCodeHash
+        - иначе -> отправить код и вернуть code_required
         """
         account = await self._get_account(db, account_id, user_id)
 
@@ -95,12 +96,12 @@ class TelegramService:
         except InvalidApiCredentials:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "INVALID_API_CREDENTIALS", "message": "Неверные api_id/api_hash"}
+                detail={"error": "INVALID_API_CREDENTIALS", "message": "Неверный API ID или API Hash"}
             )
         except AlreadyConnected:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "ALREADY_CONNECTED", "message": "Клиент уже подключён"}
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"error": "ALREADY_CONNECTED", "message": "Аккаунт уже подключен"}
             )
         except FloodWait as e:
             raise HTTPException(
@@ -122,11 +123,12 @@ class TelegramService:
                     await self._set_status_field(db, account, "online")
                 except Exception:
                     logger.debug("Failed to set online status", exc_info=True)
-                return {"status": "online"}
-            # иначе отправляем код
+                return {"status": "online", "message": "Аккаунт уже подключен"}
+
+            # иначе отправляем код (phone_code_hash теперь хранится внутри TelethonManager)
             phone = account.phone
-            phone_code_hash = await self.tm.send_code(account.id, phone)
-            return {"status": "code_required", "phoneCodeHash": phone_code_hash}
+            await self.tm.send_code(account.id, phone)
+            return {"status": "code_required", "message": "Код отправлен в Telegram"}
         except PhoneNumberInvalid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -148,18 +150,17 @@ class TelegramService:
         db: AsyncSession,
         user_id: int,
         account_id: int,
-        phone: str,
-        code: str,
-        phone_code_hash: Optional[str] = None
+        code: str
     ) -> Dict[str, Any]:
         """
         Подтверждение кода: sign_in_code -> при success сохраняем session_string и ставим online.
+        phone_code_hash берется из памяти TelethonManager.
         Возвращаем структуры по контракту или выбрасываем HTTPException с кодом ошибки.
         """
         account = await self._get_account(db, account_id, user_id)
 
         try:
-            session_string = await self.tm.sign_in_code(account.id, phone, code, phone_code_hash)
+            session_string = await self.tm.sign_in_code(account.id, account.phone, code)
             if session_string:
                 await AccountService.update_session(db, account.id, session_string)
             # пометить online
@@ -167,23 +168,37 @@ class TelegramService:
                 await self._set_status_field(db, account, "online")
             except Exception:
                 logger.debug("Failed to set online status", exc_info=True)
-            return {"status": "online"}
+            return {"status": "connected", "message": "Аккаунт успешно подключен"}
         except PasswordRequired:
-            # требуется пароль 2FA
+            # требуется пароль 2FA - получаем подсказку
             try:
                 await self._set_status_field(db, account, "connecting")
             except Exception:
                 pass
-            return {"status": "password_required"}
+
+            # Получаем подсказку пароля
+            password_hint = None
+            try:
+                password_hint = await self.tm.get_password_hint(account.id)
+            except Exception:
+                logger.debug("Failed to get password hint", exc_info=True)
+
+            response = {
+                "status": "password_required",
+                "message": "Требуется 2FA пароль"
+            }
+            if password_hint:
+                response["passwordHint"] = password_hint
+            return response
         except InvalidCode:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "INVALID_CODE", "message": "Неверный код"}
+                detail={"error": "INVALID_CODE", "message": "Неверный код подтверждения"}
             )
-        except ExpiredCode:
+        except ExpiredCodeError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "EXPIRED_CODE", "message": "Код истёк"}
+                detail={"error": "EXPIRED_CODE", "message": "Код истек, запросите новый"}
             )
         except FloodWait as e:
             raise HTTPException(
@@ -221,7 +236,12 @@ class TelegramService:
                 await self._set_status_field(db, account, "online")
             except Exception:
                 logger.debug("Failed to set online status", exc_info=True)
-            return {"status": "online"}
+            return {"status": "online", "message": "Аккаунт успешно подключен"}
+        except InvalidPasswordError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "INVALID_PASSWORD", "message": "Неверный пароль"}
+            )
         except FloodWait as e:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -251,7 +271,7 @@ class TelegramService:
                 await self._set_status_field(db, account, "offline")
             except Exception:
                 logger.debug("Failed to set offline status", exc_info=True)
-            return {"status": "disconnected"}
+            return {"status": "disconnected", "message": "Аккаунт отключен"}
         except NotConnected:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -276,11 +296,11 @@ class TelegramService:
                 await self._set_status_field(db, account, "offline")
             except Exception:
                 logger.debug("Failed to set offline status", exc_info=True)
-            return {"status": "logged_out"}
+            return {"status": "logged_out", "message": "Выход выполнен, сессия удалена"}
         except NotConnected:
             # даже если нет клиента — очистим локально
             await self._clear_session(db, account.id)
-            return {"status": "logged_out"}
+            return {"status": "logged_out", "message": "Выход выполнен, сессия удалена"}
         except FloodWait as e:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
