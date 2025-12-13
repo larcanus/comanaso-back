@@ -88,49 +88,64 @@ function Get-AuthHeaders {
 }
 
 function Ensure-TestAccount {
-    param($phone = $envPhone, $name = "Test Telegram Account")
+    Write-Host "Ensuring test account exists..." -ForegroundColor Cyan
     $h = Get-AuthHeaders
-    if (-not $h) { return $null }
 
-    # Попробуем найти существующий тест-аккаунт
+    # Получаем список аккаунтов
     try {
-        $list = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Get -Headers $h -StatusCodeVariable status
-        Write-Info "List accounts returned status $status"
-        if ($list -and $list.accounts) {
-            foreach ($a in $list.accounts) {
-                if ($a.phoneNumber -eq $phone) {
-                    $script:TestAccountId = $a.id
-                    Write-Success "Found existing test account id=$script:TestAccountId"
-                    return $script:TestAccountId
-                }
-            }
+        $accounts = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Get -Headers $h -StatusCodeVariable status
+        Write-Host "List accounts returned status $status" -ForegroundColor Gray
+
+        # Ищем аккаунт с нашим номером
+        $existing = $accounts | Where-Object { $_.phoneNumber -eq $envPhone }
+        if ($existing) {
+            $script:TestAccountId = $existing.id
+            Write-Host "✅ Found existing test account id=$($existing.id)" -ForegroundColor Green
+            return $true
         }
     } catch {
-        Write-Warning "Could not list accounts: $($_.Exception.Message)"
-        if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-            try { ($_.ErrorDetails.Message | ConvertFrom-Json) | ConvertTo-Json -Depth 10 | Write-Host } catch { Write-Host $_.ErrorDetails.Message }
-        }
+        Write-Host "Failed to list accounts: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 
-    # Создать новый с реальными API credentials
+    # Создаем новый аккаунт
     $body = @{
-        name = $name
-        phoneNumber = $phone
-        apiId = $envApiId
+        name = "Test Telegram Account"
+        phoneNumber = $envPhone
+        apiId = [int64]$envApiId
         apiHash = $envApiHash
     } | ConvertTo-Json
 
     try {
-        $resp = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Post -Headers $h -Body $body -StatusCodeVariable status
-        Write-Success "Created test account id=$($resp.id) (status $status)"
-        $script:TestAccountId = $resp.id
-        return $script:TestAccountId
+        $account = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Post -Headers $h -Body $body -StatusCodeVariable status
+        $script:TestAccountId = $account.id
+        Write-Host "✅ Created test account id=$($account.id) (status $status)" -ForegroundColor Green
+        return $true
     } catch {
-        Write-Error "Failed to create test account: $($_.Exception.Message)"
-        if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-            try { ($_.ErrorDetails.Message | ConvertFrom-Json) | ConvertTo-Json -Depth 10 | Write-Host } catch { Write-Host $_.ErrorDetails.Message }
+        # Если аккаунт уже существует - это не ошибка!
+        if ($_.Exception.Response.StatusCode -eq 400) {
+            try {
+                $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+                if ($errorDetails.error -eq "ACCOUNT_ALREADY_EXISTS") {
+                    Write-Host "⚠️ Account already exists, fetching it..." -ForegroundColor Yellow
+                    # Повторно получаем список и находим аккаунт
+                    $accounts = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Get -Headers $h
+                    $existing = $accounts | Where-Object { $_.phoneNumber -eq $envPhone }
+                    if ($existing) {
+                        $script:TestAccountId = $existing.id
+                        Write-Host "✅ Using existing account id=$($existing.id)" -ForegroundColor Green
+                        return $true
+                    }
+                }
+            } catch {
+                # Игнорируем ошибки парсинга
+            }
         }
-        return $null
+
+        Write-Host "❌ Failed to create test account: $($_.Exception.Message)" -ForegroundColor Red
+        if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+            $_.ErrorDetails.Message | ConvertFrom-Json | ConvertTo-Json | Write-Host
+        }
+        return $false
     }
 }
 

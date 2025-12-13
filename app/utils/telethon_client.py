@@ -76,9 +76,9 @@ class TelethonManager:
     """Менеджер для управления Telethon клиентами"""
 
     def __init__(self):
-        self.clients: dict[int, TelegramClient] = {}
-        self._phone_code_hashes: dict[int, str] = {}  # Хранилище phone_code_hash по account_id
-        self._locks: dict[int, asyncio.Lock] = {}
+        self._clients: Dict[int, TelegramClient] = {}
+        self._phone_code_hashes: Dict[int, str] = {}
+        self._password_hints: Dict[int, Optional[str]] = {}
         logger.info("TelethonManager инициализирован")
 
     def _get_lock(self, account_id: int) -> asyncio.Lock:
