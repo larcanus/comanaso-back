@@ -264,11 +264,16 @@ Response 404:
 POST /api/accounts/{accountId}/connect
 Authorization: Bearer {token}
 
-Response 200:
+Response 200 (уже авторизован):
+{
+  "status": "online",
+  "message": "Аккаунт уже подключен"
+}
+
+Response 200 (нужен код):
 {
   "status": "code_required",
   "message": "Код отправлен в Telegram",
-  "phoneCodeHash": "abc123def456"    // Внутренний хеш для следующего шага
 }
 
 Response 400:
@@ -294,30 +299,31 @@ Content-Type: application/json
 Request:
 {
   "code": "12345",
-  "phoneCodeHash": "abc123def456"
 }
 
-Response 200:
+Response 200 (успех без 2FA):
 {
   "status": "connected",
   "message": "Аккаунт успешно подключен",
-  "account": {
-    "id": 1,
-    "status": "online",
-    "entity": {
-      "id": 123456789,
-      "firstName": "Иван",
-      "lastName": "Петров",
-      "username": "ivan_petrov",
-      "phone": "+79991234567"
-    }
-  }
+}
+
+Response 200 (нужен 2FA):
+{
+  "status": "password_required",
+  "message": "Требуется 2FA пароль",
+  "passwordHint": "Первая буква имени..."  // может быть null
 }
 
 Response 400:
 {
   "error": "INVALID_CODE",
   "message": "Неверный код подтверждения"
+}
+
+Response 400:
+{
+  "error": "EXPIRED_CODE",
+  "message": "Код истек, запросите новый"
 }
 
 Response 403:
@@ -342,19 +348,8 @@ Request:
 
 Response 200:
 {
-  "status": "connected",
+  "status": "online",
   "message": "Аккаунт успешно подключен",
-  "account": {
-    "id": 1,
-    "status": "online",
-    "entity": {
-      "id": 123456789,
-      "firstName": "Иван",
-      "lastName": "Петров",
-      "username": "ivan_petrov",
-      "phone": "+79991234567"
-    }
-  }
 }
 
 Response 400:
@@ -374,11 +369,6 @@ Response 200:
 {
   "status": "disconnected",
   "message": "Аккаунт отключен",
-  "account": {
-    "id": 1,
-    "status": "offline",
-    "entity": null
-  }
 }
 
 Response 404:
