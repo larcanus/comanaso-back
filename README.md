@@ -202,9 +202,10 @@ Content-Type: application/json
 
 Request:
 {
-  "name": "Обновленное название",
+  "name": "Обновленное название",   // опционально
   "apiId": "12345678",              // опционально
   "apiHash": "new_hash"             // опционально
+  "phoneNumber": "+79991234567"     // опционально
 }
 
 Response 200:
