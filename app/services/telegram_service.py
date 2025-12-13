@@ -273,15 +273,17 @@ class TelegramService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"error": "INVALID_PASSWORD", "message": "Неверный пароль"}
             )
+        except NotConnected as e:
+            # Может означать либо отсутствие клиента, либо неверное состояние
+            message = str(e) if "код подтверждения" in str(e) else "Клиент не создан или не в состоянии для 2FA"
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "NOT_CONNECTED", "message": message}
+            )
         except FloodWait as e:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": getattr(e, "seconds", None)}
-            )
-        except NotConnected:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "NOT_CONNECTED", "message": "Клиент не создан"}
+                detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": e.seconds}
             )
         except TelethonManagerError as e:
             raise HTTPException(

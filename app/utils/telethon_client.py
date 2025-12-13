@@ -226,10 +226,11 @@ class TelethonManager:
 
         Raises:
             InvalidPasswordError: Неверный пароль
+            NotConnected: Клиент не в состоянии для 2FA (нужно сначала ввести код)
         """
         client = self._clients.get(account_id)
         if not client:
-            raise TelethonManagerError(f"Клиент для аккаунта {account_id} не найден")
+            raise NotConnected(f"Клиент для аккаунта {account_id} не найден")
 
         try:
             await client.sign_in(password=password)
@@ -243,9 +244,16 @@ class TelethonManager:
         except PasswordHashInvalidError:
             logger.warning(f"Неверный пароль для аккаунта {account_id}")
             raise InvalidPasswordError("Неверный пароль")
+        except errors.FloodWaitError as e:
+            raise FloodWait(int(getattr(e, "seconds", 0)))
         except Exception as e:
+            error_msg = str(e)
+            # "The key is not registered" означает что клиент не в правильном состоянии
+            if "key is not registered" in error_msg.lower():
+                logger.warning(f"Неверное состояние для 2FA аккаунта {account_id}: {error_msg}")
+                raise NotConnected("Требуется сначала ввести код подтверждения")
             logger.error(f"Ошибка входа с 2FA для аккаунта {account_id}: {e}")
-            raise TelethonManagerError(f"Не удалось войти с паролем: {str(e)}")
+            raise TelethonManagerError(f"Не удалось войти с паролем: {error_msg}")
 
     async def disconnect(self, account_id: int) -> None:
         """
