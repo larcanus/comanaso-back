@@ -163,13 +163,13 @@ function Cleanup-TestAccounts {
     }
 
     try {
-        # Получаем список всех аккаунтов
-        $response = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Get -Headers $authHeaders
+        # Получаем список всех аккаунтов (массив напрямую)
+        $accounts = Invoke-RestMethod -Uri "$BASE_URL/accounts" -Method Get -Headers $authHeaders
 
-        if ($response.accounts -and $response.accounts.Count -gt 0) {
-            Write-Info "Found $($response.accounts.Count) account(s) to delete"
+        if ($accounts -is [Array] -and $accounts.Count -gt 0) {
+            Write-Info "Found $($accounts.Count) account(s) to delete"
 
-            foreach ($account in $response.accounts) {
+            foreach ($account in $accounts) {
                 # Удаляем тестовые аккаунты (с номером +79991234567 или именем содержащим "Test")
                 if ($account.phoneNumber -eq "+79991234567" -or $account.name -like "*Test*") {
                     try {
@@ -228,19 +228,125 @@ function Test-GetAccounts {
         Write-Success "✓ Get accounts successful"
         Show-Response $response $statusCode
 
-        # Проверка структуры ответа
-        if ($response.accounts -is [Array]) {
-            Write-Success "✓ Response contains accounts array"
-            if ($response.accounts.Count -gt 0) {
-                $account = $response.accounts[0]
-                if ($account.id -and $account.name -and $account.phoneNumber -and $account.status) {
-                    Write-Success "✓ Account structure is correct"
-                } else {
-                    Write-Error "✗ Account structure is incorrect"
+        # Проверка структуры ответа - должен быть массив напрямую
+        if ($response -is [Array]) {
+            Write-Success "✓ Response is an array (matches API contract)"
+            if ($response.Count -gt 0) {
+                $account = $response[0]
+
+                # 1. Проверка наличия всех обязательных полей
+                $requiredFields = @('id', 'name', 'phoneNumber', 'apiId', 'apiHash', 'status', 'createdAt', 'updatedAt')
+                $missingFields = @()
+                foreach ($field in $requiredFields) {
+                    if (-not $account.PSObject.Properties[$field]) {
+                        $missingFields += $field
+                    }
                 }
+
+                if ($missingFields.Count -gt 0) {
+                    Write-Error "✗ Missing required fields: $($missingFields -join ', ')"
+                    return $response
+                }
+                Write-Success "✓ All required fields present"
+
+                # 2. Проверка точного количества полей (не должно быть лишних)
+                $actualFieldCount = $account.PSObject.Properties.Count
+                $expectedFieldCount = 8
+                if ($actualFieldCount -eq $expectedFieldCount) {
+                    Write-Success "✓ Exact field count is correct ($actualFieldCount fields)"
+                } else {
+                    Write-Error "✗ Field count mismatch: expected $expectedFieldCount, got $actualFieldCount"
+                    $actualFields = $account.PSObject.Properties.Name
+                    $extraFields = $actualFields | Where-Object { $_ -notin $requiredFields }
+                    if ($extraFields) {
+                        Write-Info "Extra fields found: $($extraFields -join ', ')"
+                    }
+                }
+
+                # 3. Проверка типов данных
+                $typeErrors = @()
+                if ($account.id -isnot [int] -and $account.id -isnot [long]) {
+                    $typeErrors += "id должен быть числом, получен: $($account.id.GetType().Name)"
+                }
+                if ($account.name -isnot [string]) {
+                    $typeErrors += "name должен быть строкой, получен: $($account.name.GetType().Name)"
+                }
+                if ($account.phoneNumber -isnot [string]) {
+                    $typeErrors += "phoneNumber должен быть строкой, получен: $($account.phoneNumber.GetType().Name)"
+                }
+                if ($account.apiId -isnot [string]) {
+                    $typeErrors += "apiId должен быть строкой, получен: $($account.apiId.GetType().Name)"
+                }
+                if ($account.apiHash -isnot [string]) {
+                    $typeErrors += "apiHash должен быть строкой, получен: $($account.apiHash.GetType().Name)"
+                }
+                if ($account.status -isnot [string]) {
+                    $typeErrors += "status должен быть строкой, получен: $($account.status.GetType().Name)"
+                }
+                if ($account.createdAt -isnot [string] -and $account.createdAt -isnot [datetime]) {
+                    $typeErrors += "createdAt должен быть строкой или датой, получен: $($account.createdAt.GetType().Name)"
+                }
+                if ($account.updatedAt -isnot [string] -and $account.updatedAt -isnot [datetime]) {
+                    $typeErrors += "updatedAt должен быть строкой или датой, получен: $($account.updatedAt.GetType().Name)"
+                }
+
+                if ($typeErrors.Count -gt 0) {
+                    Write-Error "✗ Type validation errors:"
+                    foreach ($error in $typeErrors) {
+                        Write-Info "  - $error"
+                    }
+                } else {
+                    Write-Success "✓ All field types are correct"
+                }
+
+                # 4. Проверка форматов и значений
+                $formatErrors = @()
+
+                # ID должен быть положительным
+                if ($account.id -le 0) {
+                    $formatErrors += "id должен быть положительным числом, получен: $($account.id)"
+                }
+
+                # Телефон должен начинаться с +
+                if (-not $account.phoneNumber.StartsWith('+')) {
+                    $formatErrors += "phoneNumber должен начинаться с '+', получен: $($account.phoneNumber)"
+                }
+
+                # apiId не должен быть пустым
+                if ([string]::IsNullOrWhiteSpace($account.apiId)) {
+                    $formatErrors += "apiId не должен быть пустым"
+                }
+
+                # apiHash не должен быть пустым и должен быть 32 символа
+                if ([string]::IsNullOrWhiteSpace($account.apiHash)) {
+                    $formatErrors += "apiHash не должен быть пустым"
+                } elseif ($account.apiHash.Length -ne 32) {
+                    $formatErrors += "apiHash должен быть 32 символа, получено: $($account.apiHash.Length)"
+                }
+
+                # Проверка допустимых значений статуса
+                $validStatuses = @("online", "offline", "connecting", "error")
+                if ($account.status -notin $validStatuses) {
+                    $formatErrors += "status должен быть одним из [$($validStatuses -join ', ')], получен: $($account.status)"
+                }
+
+                if ($formatErrors.Count -gt 0) {
+                    Write-Error "✗ Format validation errors:"
+                    foreach ($error in $formatErrors) {
+                        Write-Info "  - $error"
+                    }
+                } else {
+                    Write-Success "✓ All field formats are valid"
+                    Write-Success "✓ Account status is valid: $($account.status)"
+                }
+
+            } else {
+                Write-Success "✓ Empty accounts array (valid response)"
             }
         } else {
-            Write-Success "✓ Empty accounts list"
+            Write-Error "✗ Response is not an array (contract violation)"
+            Write-Info "Expected: array of accounts"
+            Write-Info "Got: $($response.GetType().Name)"
         }
 
         return $response
