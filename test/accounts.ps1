@@ -529,6 +529,102 @@ function Test-UpdateAccount {
     }
 }
 
+function Test-UpdateAccountPhone {
+    Write-Info "`n=== TEST: Update Account Phone Number ==="
+    $authHeaders = Get-AuthHeaders
+    if (-not $authHeaders) { return $null }
+
+    if (-not $script:TestAccountId) {
+        Write-Error "✗ No test account ID. Create account first"
+        return $null
+    }
+
+    $newPhone = "+79999999999"
+    $body = @{
+        phoneNumber = $newPhone
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
+        Write-Success "✓ Update account phone successful"
+        Show-Response $response $statusCode
+
+        # Проверка обновленного телефона
+        if ($response.phoneNumber -eq $newPhone) {
+            Write-Success "✓ Phone number updated correctly"
+            Write-Info "Old: +79991234567 → New: $($response.phoneNumber)"
+        } else {
+            Write-Error "✗ Phone number is incorrect"
+            Write-Info "Expected: $newPhone"
+            Write-Info "Got: $($response.phoneNumber)"
+        }
+
+        # Проверка что остальные поля не изменились
+        if ($response.name -eq "Updated Test Account") {
+            Write-Success "✓ Other fields remained unchanged"
+        } else {
+            Write-Error "✗ Other fields were affected"
+        }
+
+        return $response
+    }
+    catch {
+        Write-Error "✗ Update account phone failed"
+        Write-Host $_.Exception.Message
+        if ($_.ErrorDetails.Message) {
+            $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+            Write-Info "Error details:"
+            $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+        }
+        return $null
+    }
+}
+
+function Test-UpdateAccountInvalidPhone {
+    Write-Info "`n=== TEST: Update Account with Invalid Phone ==="
+    $authHeaders = Get-AuthHeaders
+    if (-not $authHeaders) { return }
+
+    if (-not $script:TestAccountId) {
+        Write-Error "✗ No test account ID. Create account first"
+        return
+    }
+
+    $body = @{
+        phoneNumber = "invalid_phone"
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected invalid phone number"
+        if ($_.ErrorDetails.Message) {
+            $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+            Write-Info "Error response:"
+            $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+            if ($errorDetails.error -eq "VALIDATION_ERROR") {
+                Write-Success "✓ Error code is correct (VALIDATION_ERROR)"
+
+                if ($errorDetails.message -like "*формат*" -or $errorDetails.message -like "*телефон*") {
+                    Write-Success "✓ Error message is correct"
+                } else {
+                    Write-Error "✗ Error message is incorrect"
+                    Write-Info "Expected message about phone format"
+                    Write-Info "Got: $($errorDetails.message)"
+                }
+            } else {
+                Write-Error "✗ Error code is incorrect"
+                Write-Info "Expected: VALIDATION_ERROR"
+                Write-Info "Got: $($errorDetails.error)"
+            }
+        }
+    }
+}
+
 function Test-UpdateNonExistentAccount {
     Write-Info "`n=== TEST: Update Non-Existent Account ==="
     $authHeaders = Get-AuthHeaders
@@ -860,6 +956,8 @@ function Run-AllTests {
 
     # Тесты обновления
     Test-UpdateAccount; Start-Sleep -Seconds 1
+    Test-UpdateAccountPhone; Start-Sleep -Seconds 1
+    Test-UpdateAccountInvalidPhone; Start-Sleep -Seconds 1
     Test-UpdateNonExistentAccount; Start-Sleep -Seconds 1
 
     # Тесты удаления
@@ -891,8 +989,10 @@ function Show-Menu {
     Write-Host "6. Create Duplicate Account (negative test)"
     Write-Host "7. Create Account with Invalid Phone (negative test)"
     Write-Host "8. Update Account"
-    Write-Host "9. Update Non-Existent Account (negative test)"
-    Write-Host "10. Delete Account"
+    Write-Host "9. Update Account Phone Number"
+    Write-Host "10. Update Account with Invalid Phone (negative test)"
+    Write-Host "11. Update Non-Existent Account (negative test)"
+    Write-Host "12. Delete Account"
     Write-Host "11. Delete Non-Existent Account (negative test)"
     Write-Host "12. Get Accounts Without Auth (401 test)"
     Write-Host "13. Create Account Without Auth (401 test)"
@@ -916,14 +1016,16 @@ if ($args.Count -eq 0) {
             "6" { Test-CreateDuplicateAccount }
             "7" { Test-CreateAccountInvalidPhone }
             "8" { Test-UpdateAccount }
-            "9" { Test-UpdateNonExistentAccount }
-            "10" { Test-DeleteAccount }
-            "11" { Test-DeleteNonExistentAccount }
-            "12" { Test-GetAccountsWithoutAuth }
-            "13" { Test-CreateAccountWithoutAuth }
-            "14" { Test-UpdateAccountWithoutAuth }
-            "15" { Test-DeleteAccountWithoutAuth }
-            "16" { Cleanup-TestUsers }
+            "9" { Test-UpdateAccountPhone }
+            "10" { Test-UpdateAccountInvalidPhone }
+            "11" { Test-UpdateNonExistentAccount }
+            "12" { Test-DeleteAccount }
+            "13" { Test-DeleteNonExistentAccount }
+            "14" { Test-GetAccountsWithoutAuth }
+            "15" { Test-CreateAccountWithoutAuth }
+            "16" { Test-UpdateAccountWithoutAuth }
+            "17" { Test-DeleteAccountWithoutAuth }
+            "18" { Cleanup-TestUsers }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
         }

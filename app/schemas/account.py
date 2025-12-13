@@ -57,6 +57,7 @@ class AccountCreate(AccountBase):
 
 class AccountUpdate(AccountBase):
     """Схема для обновления аккаунта."""
+    phone: Optional[str] = Field(None, alias="phoneNumber", description="Номер телефона в международном формате")
     api_id: Optional[int] = Field(None, alias="apiId", description="Telegram API ID")
     api_hash: Optional[str] = Field(None, alias="apiHash", description="Telegram API Hash")
 
@@ -65,11 +66,20 @@ class AccountUpdate(AccountBase):
         "json_schema_extra": {
             "example": {
                 "name": "Updated Account Name",
+                "phoneNumber": "+79997654321",
                 "apiId": 87654321,
                 "apiHash": "new_hash_1234567890abcdef1234567890ab"
             }
         }
     }
+
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        """Валидация номера телефона."""
+        if v is not None and not re.match(r'^\+\d{10,15}$', v):
+            raise ValueError('Номер телефона должен быть в формате +XXXXXXXXXXX')
+        return v
 
     @field_validator('api_id')
     @classmethod

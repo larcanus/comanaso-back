@@ -108,7 +108,7 @@ async def get_account(
 
 @router.patch(
     "/{account_id}",
-    response_model=AccountDetailResponse,
+    response_model=AccountResponse,
     summary="Обновить данные аккаунта"
 )
 async def update_account(
@@ -122,10 +122,11 @@ async def update_account(
 
     - **account_id**: ID аккаунта
     - **name**: Новое имя аккаунта (опционально)
+    - **phoneNumber**: Новый номер телефона (опционально)
     - **api_id**: Новый API ID (опционально)
     - **api_hash**: Новый API Hash (опционально)
 
-    Возвращает обновленный аккаунт.
+    Возвращает обновленный аккаунт с 8 полями: id, name, phoneNumber, apiId, apiHash, status, createdAt, updatedAt.
     Доступ только для владельца аккаунта.
     """
     account = await AccountService.update_account(
