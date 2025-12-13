@@ -13,6 +13,9 @@ from telethon.errors import (
 from telethon.sessions import StringSession
 from telethon import errors
 
+logger = logging.getLogger(__name__)
+
+
 # Exceptions для маппинга в сервис/роутеры
 class TelethonManagerError(Exception):
     """Базовое исключение для ошибок TelethonManager"""

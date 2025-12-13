@@ -142,14 +142,23 @@ function Test-Connect {
     try {
         $resp = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId/connect" -Method Post -Headers $h -Body $body -StatusCodeVariable status
         Show-Response $resp $status
+
+        # Проверка обязательных полей согласно контракту
+        if ($resp.status -eq "online" -or $resp.status -eq "code_required") {
+            if (-not $resp.message) {
+                Write-Warning "⚠️ Поле 'message' отсутствует в ответе!"
+            } else {
+                Write-Success "✅ Корректный ответ: status=$($resp.status), message присутствует"
+            }
+        }
+
         # Если в теле есть поле error — дать подсказку
-        if ($resp -and ($resp.error -or $resp.status)) {
+        if ($resp -and $resp.error) {
             if ($resp.error -eq "INVALID_API_CREDENTIALS") {
                 Write-Warning "Invalid API credentials detected. Проверьте apiId/apiHash для аккаунта $script:TestAccountId."
                 Write-Warning "Убедитесь, что вы используете реальные API credentials из https://my.telegram.org"
-            } elseif ($resp.error -eq "TELETHON_ERROR" -and $resp.message -match "api_id\/api_hash") {
-                Write-Warning "Telethon returned api_id/api_hash error. Проверьте apiId/apiHash в настройках аккаунта."
-                Write-Warning "Убедитесь, что вы используете реальные API credentials из https://my.telegram.org"
+            } elseif ($resp.error -eq "ALREADY_CONNECTED") {
+                Write-Info "Аккаунт уже подключен (status code должен быть 409)"
             }
         }
     } catch {
@@ -157,10 +166,11 @@ function Test-Connect {
         if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
             try {
                 $err = $_.ErrorDetails.Message | ConvertFrom-Json
-                Show-Response $err $_.StatusCode
-                if ($err.error -eq "INVALID_API_CREDENTIALS" -or ($err.error -eq "TELETHON_ERROR" -and $err.message -match "api_id\/api_hash")) {
-                    Write-Warning "Invalid API credentials detected in error response. Проверьте apiId/apiHash для аккаунта $script:TestAccountId."
-                    Write-Warning "Убедитесь, что вы используете реальные API credentials из https://my.telegram.org"
+                Show-Response $err $_.Exception.Response.StatusCode.value__
+                if ($err.error -eq "INVALID_API_CREDENTIALS") {
+                    Write-Warning "Invalid API credentials detected in error response."
+                } elseif ($err.error -eq "ALREADY_CONNECTED" -and $_.Exception.Response.StatusCode.value__ -ne 409) {
+                    Write-Warning "⚠️ ALREADY_CONNECTED должен возвращать status code 409!"
                 }
             } catch {
                 Write-Host $_.ErrorDetails.Message
@@ -169,32 +179,84 @@ function Test-Connect {
     }
 }
 
-function Test-GetDialogs {
+function Test-VerifyCode {
+    param([string]$code = "12345")
     if (-not $script:TestAccountId) { Write-Error "No account id"; return }
     $h = Get-AuthHeaders
-    Write-Host "`n--- TEST: GET DIALOGS (account id: $script:TestAccountId) ---" -ForegroundColor Yellow
+    $body = @{ code = $code } | ConvertTo-Json
+    Write-Host "`n--- TEST: VERIFY CODE (account id: $script:TestAccountId) ---" -ForegroundColor Yellow
+    Write-Info "Отправка кода: $code"
     try {
-        $resp = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId/dialogs?limit=10" -Method Get -Headers $h -StatusCodeVariable status
+        $resp = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId/verify-code" -Method Post -Headers $h -Body $body -StatusCodeVariable status
         Show-Response $resp $status
+
+        # Проверка обязательных полей
+        if ($resp.status -eq "connected") {
+            if (-not $resp.message) {
+                Write-Warning "⚠️ Поле 'message' отсутствует!"
+            } else {
+                Write-Success "✅ Успешное подключение без 2FA"
+            }
+        } elseif ($resp.status -eq "password_required") {
+            if (-not $resp.message) {
+                Write-Warning "⚠️ Поле 'message' отсутствует!"
+            }
+            if ($resp.PSObject.Properties.Name -contains "passwordHint") {
+                Write-Info "Подсказка пароля: $($resp.passwordHint)"
+            } else {
+                Write-Warning "⚠️ Поле 'passwordHint' отсутствует (может быть null по контракту)"
+            }
+            Write-Success "✅ Требуется 2FA пароль"
+        }
     } catch {
-        Write-Error "Get dialogs failed: $($_.Exception.Message)"
+        Write-Error "Verify code failed: $($_.Exception.Message)"
         if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-            try { ($_.ErrorDetails.Message | ConvertFrom-Json) | ConvertTo-Json -Depth 10 | Write-Host } catch { Write-Host $_.ErrorDetails.Message }
+            try {
+                $err = $_.ErrorDetails.Message | ConvertFrom-Json
+                Show-Response $err $_.Exception.Response.StatusCode.value__
+                if ($err.error -eq "INVALID_CODE") {
+                    Write-Info "Код неверный (ожидаемое поведение для тестового кода)"
+                } elseif ($err.error -eq "EXPIRED_CODE") {
+                    Write-Warning "Код истек - нужно запросить новый через /connect"
+                }
+            } catch {
+                Write-Host $_.ErrorDetails.Message
+            }
         }
     }
 }
 
-function Test-GetData {
+function Test-VerifyPassword {
+    param([string]$password = "test_password")
     if (-not $script:TestAccountId) { Write-Error "No account id"; return }
     $h = Get-AuthHeaders
-    Write-Host "`n--- TEST: GET DATA (account id: $script:TestAccountId) ---" -ForegroundColor Yellow
+    $body = @{ password = $password } | ConvertTo-Json
+    Write-Host "`n--- TEST: VERIFY PASSWORD (account id: $script:TestAccountId) ---" -ForegroundColor Yellow
+    Write-Warning "Используется тестовый пароль - для реального теста передайте параметр"
     try {
-        $resp = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId/data" -Method Get -Headers $h -StatusCodeVariable status
+        $resp = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId/verify-password" -Method Post -Headers $h -Body $body -StatusCodeVariable status
         Show-Response $resp $status
+
+        # Проверка обязательных полей
+        if ($resp.status -eq "online") {
+            if (-not $resp.message) {
+                Write-Warning "⚠️ Поле 'message' отсутствует!"
+            } else {
+                Write-Success "✅ Успешное подключение с 2FA"
+            }
+        }
     } catch {
-        Write-Error "Get data failed: $($_.Exception.Message)"
+        Write-Error "Verify password failed: $($_.Exception.Message)"
         if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-            try { ($_.ErrorDetails.Message | ConvertFrom-Json) | ConvertTo-Json -Depth 10 | Write-Host } catch { Write-Host $_.ErrorDetails.Message }
+            try {
+                $err = $_.ErrorDetails.Message | ConvertFrom-Json
+                Show-Response $err $_.Exception.Response.StatusCode.value__
+                if ($err.error -eq "INVALID_PASSWORD") {
+                    Write-Info "Пароль неверный (ожидаемое поведение для тестового пароля)"
+                }
+            } catch {
+                Write-Host $_.ErrorDetails.Message
+            }
         }
     }
 }
@@ -206,11 +268,29 @@ function Test-Disconnect {
     try {
         $resp = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId/disconnect" -Method Post -Headers $h -Body "{}" -StatusCodeVariable status
         Show-Response $resp $status
-        if ($status -eq 200) { Write-Success "Disconnected OK" } else { Write-Warning "Disconnect returned $status" }
+
+        # Проверка обязательных полей согласно контракту
+        if ($status -eq 200) {
+            if ($resp.status -ne "disconnected") {
+                Write-Warning "⚠️ Поле 'status' должно быть 'disconnected', получено: $($resp.status)"
+            }
+            if (-not $resp.message) {
+                Write-Warning "⚠️ Поле 'message' отсутствует!"
+            } else {
+                Write-Success "✅ Аккаунт отключен: $($resp.message)"
+            }
+        } else {
+            Write-Warning "Disconnect returned unexpected status $status"
+        }
     } catch {
         Write-Error "Disconnect failed: $($_.Exception.Message)"
         if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-            try { ($_.ErrorDetails.Message | ConvertFrom-Json) | ConvertTo-Json -Depth 10 | Write-Host } catch { Write-Host $_.ErrorDetails.Message }
+            try {
+                $err = $_.ErrorDetails.Message | ConvertFrom-Json
+                Show-Response $err $_.Exception.Response.StatusCode.value__
+            } catch {
+                Write-Host $_.ErrorDetails.Message
+            }
         }
     }
 }
@@ -222,16 +302,36 @@ function Test-Logout {
     try {
         $resp = Invoke-RestMethod -Uri "$BASE_URL/accounts/$script:TestAccountId/logout" -Method Post -Headers $h -Body "{}" -StatusCodeVariable status
         Show-Response $resp $status
+
+        # Проверка обязательных полей согласно контракту
+        if ($status -eq 200) {
+            if ($resp.status -ne "logged_out") {
+                Write-Warning "⚠️ Поле 'status' должно быть 'logged_out', получено: $($resp.status)"
+            }
+            if (-not $resp.message) {
+                Write-Warning "⚠️ Поле 'message' отсутствует!"
+            } else {
+                Write-Success "✅ Выход выполнен: $($resp.message)"
+            }
+        }
     } catch {
         Write-Error "Logout failed: $($_.Exception.Message)"
         if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-            try { ($_.ErrorDetails.Message | ConvertFrom-Json) | ConvertTo-Json -Depth 10 | Write-Host } catch { Write-Host $_.ErrorDetails.Message }
+            try {
+                $err = $_.ErrorDetails.Message | ConvertFrom-Json
+                Show-Response $err $_.Exception.Response.StatusCode.value__
+                if ($err.error -eq "ACCOUNT_NOT_CONNECTED") {
+                    Write-Info "Аккаунт не подключен (ожидаемая ошибка если logout вызван повторно)"
+                }
+            } catch {
+                Write-Host $_.ErrorDetails.Message
+            }
         }
     }
 }
 
 function Run-AllTests {
-    Write-Host "`n=== TELEGRAM ROUTES DETAILED SMOKE TESTS ===" -ForegroundColor Yellow
+    Write-Host "`n=== TELEGRAM CONNECTION TESTS (базовые операции) ===" -ForegroundColor Yellow
     Write-Host "Using API ID: $envApiId" -ForegroundColor Cyan
     Write-Host "Using Phone: $envPhone" -ForegroundColor Cyan
 
@@ -240,13 +340,34 @@ function Run-AllTests {
     if (-not (Ensure-TestAccount)) { Write-Error "Cannot ensure account"; return }
     Start-Sleep -Seconds 1
 
-    Test-Connect; Start-Sleep -Seconds 1
-    Test-GetDialogs; Start-Sleep -Seconds 1
-    Test-GetData; Start-Sleep -Seconds 1
-    Test-Disconnect; Start-Sleep -Seconds 1
-    Test-Logout; Start-Sleep -Seconds 1
+    # Тест 1: Подключение
+    Test-Connect
+    Start-Sleep -Seconds 2
+
+    # Тест 2: Проверка кода (с заведомо неверным кодом для демонстрации ошибки)
+    Write-Host "`nℹ️ Следующий тест покажет ошибку INVALID_CODE (ожидаемое поведение)" -ForegroundColor Cyan
+    Test-VerifyCode -code "12345"
+    Start-Sleep -Seconds 2
+
+    # Тест 3: Проверка пароля (с заведомо неверным паролем для демонстрации ошибки)
+    Write-Host "`nℹ️ Следующий тест покажет ошибку INVALID_PASSWORD (ожидаемое поведение)" -ForegroundColor Cyan
+    Test-VerifyPassword -password "test_password"
+    Start-Sleep -Seconds 2
+
+    # Тест 4: Отключение
+    Test-Disconnect
+    Start-Sleep -Seconds 2
+
+    # Тест 5: Выход
+    Test-Logout
+    Start-Sleep -Seconds 1
 
     Write-Host "`n=== TESTS COMPLETED ===" -ForegroundColor Green
+    Write-Host "⚠️ Для полноценного теста авторизации нужно:" -ForegroundColor Yellow
+    Write-Host "   1. Запустить Test-Connect" -ForegroundColor Yellow
+    Write-Host "   2. Получить реальный код из Telegram" -ForegroundColor Yellow
+    Write-Host "   3. Вызвать Test-VerifyCode с реальным кодом" -ForegroundColor Yellow
+    Write-Host "   4. Если нужен 2FA - вызвать Test-VerifyPassword с реальным паролем" -ForegroundColor Yellow
 }
 
 # Если запущен без аргументов — выполнить все
