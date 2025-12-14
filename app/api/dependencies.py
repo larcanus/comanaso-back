@@ -8,7 +8,7 @@ FastAPI dependencies для аутентификации и авторизаци
 - CurrentUser: Типизированная зависимость для удобства использования в роутах
 """
 from typing import Annotated, Any
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, status, Request, Path
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.security.http import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,15 +91,15 @@ async def get_current_user(
     return user
 
 async def get_account(
-    accountId: int,
+    account_id: int = Path(..., description="ID аккаунта"),
     db: AsyncSession = Depends(get_db),
     current_user: Any = Depends(get_current_user),
 ) -> Account:
     """
-    Dependency: возвращает Account по accountId и проверяет, что он принадлежит current_user.
+    Dependency: возвращает Account по account_id из path и проверяет, что он принадлежит current_user.
     Возвращает 404 если не найден, 403 если нет прав.
     """
-    result = await db.execute(select(Account).filter(Account.id == accountId))
+    result = await db.execute(select(Account).filter(Account.id == account_id))
     account = result.scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
