@@ -298,23 +298,52 @@ class TelegramService:
         account = await self._get_account(db, account_id, user_id)
 
         try:
+            # Попытка отключить существующий клиент
             await self.tm.disconnect(account.id)
-            # пометить offline
-            try:
-                await self._set_status_field(db, account, "offline")
-            except Exception:
-                logger.debug("Failed to set offline status", exc_info=True)
-            return {"status": "disconnected", "message": "Аккаунт отключен"}
         except NotConnected:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "NOT_CONNECTED", "message": "Клиент не подключён"}
-            )
+            # Если клиент не найден в памяти, попытаться восстановить из session_string
+            if account.session_string:
+                try:
+                    logger.info(f"Клиент для аккаунта {account.id} не найден, восстанавливаем из session_string")
+                    await self.tm.create_client(
+                        account.id,
+                        account.api_id,
+                        account.api_hash,
+                        account.session_string
+                    )
+                    # Повторная попытка отключения
+                    await self.tm.disconnect(account.id)
+                except AlreadyConnected:
+                    # Клиент уже подключен, пытаемся отключить еще раз
+                    await self.tm.disconnect(account.id)
+                except (InvalidApiCredentials, TelethonManagerError) as e:
+                    # Не удалось восстановить клиент - просто помечаем как offline
+                    logger.warning(f"Не удалось восстановить клиент для аккаунта {account.id}: {e}")
+                    try:
+                        await self._set_status_field(db, account, "offline")
+                    except Exception:
+                        logger.debug("Failed to set offline status", exc_info=True)
+                    return {"status": "disconnected", "message": "Аккаунт отключен (клиент был недоступен)"}
+            else:
+                # Нет session_string - просто помечаем как offline
+                logger.info(f"Клиент для аккаунта {account.id} не найден и нет session_string")
+                try:
+                    await self._set_status_field(db, account, "offline")
+                except Exception:
+                    logger.debug("Failed to set offline status", exc_info=True)
+                return {"status": "disconnected", "message": "Аккаунт отключен"}
         except TelethonManagerError as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={"error": "TELETHON_ERROR", "message": str(e)}
             )
+
+        # Успешное отключение - пометить offline
+        try:
+            await self._set_status_field(db, account, "offline")
+        except Exception:
+            logger.debug("Failed to set offline status", exc_info=True)
+        return {"status": "disconnected", "message": "Аккаунт отключен"}
 
     async def logout(self, db: AsyncSession, user_id: int, account_id: int) -> Dict[str, Any]:
         """
