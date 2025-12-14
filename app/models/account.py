@@ -2,11 +2,15 @@
 SQLAlchemy модель Telegram аккаунта.
 Хранит данные о подключенных Telegram аккаунтах.
 """
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 from sqlalchemy import String, Integer, DateTime, Boolean, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class Account(Base):
@@ -74,20 +78,20 @@ class Account(Base):
         nullable=False
     )
     last_activity: Mapped[datetime | None] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True
     )
 
     # Временные метки
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
         nullable=False
     )
 
@@ -110,7 +114,7 @@ class Account(Base):
 
     def update_last_activity(self) -> None:
         """Обновление времени последней активности."""
-        self.last_activity = datetime.utcnow()
+        self.last_activity = datetime.now(timezone.utc)
 
     def __repr__(self) -> str:
         return f"<Account(id={self.id}, phone='{self.phone}', is_connected={self.is_connected})>"

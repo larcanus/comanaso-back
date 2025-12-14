@@ -2,12 +2,15 @@
 SQLAlchemy модель пользователя.
 Хранит данные о пользователях системы.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import String, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.account import Account
 
 
 class User(Base):
@@ -63,14 +66,14 @@ class User(Base):
 
     # Временные метки
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
         nullable=False
     )
 

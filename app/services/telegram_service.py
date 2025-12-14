@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Optional
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -321,7 +321,7 @@ class TelegramService:
                     # Не удалось восстановить клиент - просто помечаем как не подключенный
                     logger.warning(f"Не удалось восстановить клиент для аккаунта {account.id}: {e}")
                     account.is_connected = False
-                    account.last_activity = datetime.utcnow()
+                    account.last_activity = datetime.now(timezone.utc)
                     db.add(account)
                     await db.commit()
                     await db.refresh(account)
@@ -330,7 +330,7 @@ class TelegramService:
                 # Нет session_string - просто помечаем как не подключенный
                 logger.info(f"Клиент для аккаунта {account.id} не найден и нет session_string")
                 account.is_connected = False
-                account.last_activity = datetime.utcnow()
+                account.last_activity = datetime.now(timezone.utc)
                 db.add(account)
                 await db.commit()
                 await db.refresh(account)
@@ -343,7 +343,7 @@ class TelegramService:
 
         # Успешное отключение - пометить как не подключенный
         account.is_connected = False
-        account.last_activity = datetime.utcnow()
+        account.last_activity = datetime.now(timezone.utc)
         db.add(account)
         await db.commit()
         await db.refresh(account)
@@ -391,8 +391,8 @@ class TelegramService:
         # В любом случае очищаем session_string и помечаем как отключенный
         account.session_string = None
         account.is_connected = False
-        from datetime import datetime
-        account.last_activity = datetime.utcnow()
+        from datetime import datetime, timezone
+        account.last_activity = datetime.now(timezone.utc)
         db.add(account)
         await db.commit()
         await db.refresh(account)

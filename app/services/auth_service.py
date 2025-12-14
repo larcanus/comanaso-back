@@ -1,17 +1,17 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select, or_
-from fastapi import HTTPException, status
-import re
 import logging
+import re
+
+from fastapi import HTTPException, status
+from sqlalchemy import select, or_
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.schemas.auth import (
-    UserRegister, UserLogin, AuthResponse, UserData,
-    Token, UserResponse
+    UserRegister, UserLogin, AuthResponse, UserData
 )
-from app.utils.security import hash_password, verify_password
 from app.utils.jwt import create_access_token
+from app.utils.security import hash_password, verify_password
 
 logger = logging.getLogger(__name__)
 
