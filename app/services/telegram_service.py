@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, Optional
 import logging
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -317,20 +318,22 @@ class TelegramService:
                     # Клиент уже подключен, пытаемся отключить еще раз
                     await self.tm.disconnect(account.id)
                 except (InvalidApiCredentials, TelethonManagerError) as e:
-                    # Не удалось восстановить клиент - просто помечаем как offline
+                    # Не удалось восстановить клиент - просто помечаем как не подключенный
                     logger.warning(f"Не удалось восстановить клиент для аккаунта {account.id}: {e}")
-                    try:
-                        await self._set_status_field(db, account, "offline")
-                    except Exception:
-                        logger.debug("Failed to set offline status", exc_info=True)
+                    account.is_connected = False
+                    account.last_activity = datetime.utcnow()
+                    db.add(account)
+                    await db.commit()
+                    await db.refresh(account)
                     return {"status": "disconnected", "message": "Аккаунт отключен (клиент был недоступен)"}
             else:
-                # Нет session_string - просто помечаем как offline
+                # Нет session_string - просто помечаем как не подключенный
                 logger.info(f"Клиент для аккаунта {account.id} не найден и нет session_string")
-                try:
-                    await self._set_status_field(db, account, "offline")
-                except Exception:
-                    logger.debug("Failed to set offline status", exc_info=True)
+                account.is_connected = False
+                account.last_activity = datetime.utcnow()
+                db.add(account)
+                await db.commit()
+                await db.refresh(account)
                 return {"status": "disconnected", "message": "Аккаунт отключен"}
         except TelethonManagerError as e:
             raise HTTPException(
@@ -338,31 +341,42 @@ class TelegramService:
                 detail={"error": "TELETHON_ERROR", "message": str(e)}
             )
 
-        # Успешное отключение - пометить offline
-        try:
-            await self._set_status_field(db, account, "offline")
-        except Exception:
-            logger.debug("Failed to set offline status", exc_info=True)
+        # Успешное отключение - пометить как не подключенный
+        account.is_connected = False
+        account.last_activity = datetime.utcnow()
+        db.add(account)
+        await db.commit()
+        await db.refresh(account)
+
         return {"status": "disconnected", "message": "Аккаунт отключен"}
 
     async def logout(self, db: AsyncSession, user_id: int, account_id: int) -> Dict[str, Any]:
         """
-        Logout: снимаем сессию на сервере, очищаем session_string в БД и ставим offline.
+        Logout: снимаем сессию на сервере Telegram, очищаем session_string в БД и помечаем как отключенный.
         """
         account = await self._get_account(db, account_id, user_id)
 
         try:
+            # Попытка logout существующего клиента
             await self.tm.logout(account.id)
-            await self._clear_session(db, account.id)
-            try:
-                await self._set_status_field(db, account, "offline")
-            except Exception:
-                logger.debug("Failed to set offline status", exc_info=True)
-            return {"status": "logged_out", "message": "Выход выполнен, сессия удалена"}
         except NotConnected:
-            # даже если нет клиента — очистим локально
-            await self._clear_session(db, account.id)
-            return {"status": "logged_out", "message": "Выход выполнен, сессия удалена"}
+            # Если клиент не найден в памяти, попытаться восстановить из session_string
+            if account.session_string:
+                try:
+                    logger.info(f"Клиент для аккаунта {account.id} не найден, восстанавливаем для logout")
+                    await self.tm.create_client(
+                        account.id,
+                        account.api_id,
+                        account.api_hash,
+                        account.session_string
+                    )
+                    # Повторная попытка logout
+                    await self.tm.logout(account.id)
+                except (InvalidApiCredentials, TelethonManagerError) as e:
+                    # Не удалось восстановить клиент - просто очищаем локально
+                    logger.warning(f"Не удалось выполнить logout для аккаунта {account.id}: {e}")
+            else:
+                logger.info(f"Клиент для аккаунта {account.id} не найден и нет session_string")
         except FloodWait as e:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -373,6 +387,17 @@ class TelegramService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={"error": "TELETHON_ERROR", "message": str(e)}
             )
+
+        # В любом случае очищаем session_string и помечаем как отключенный
+        account.session_string = None
+        account.is_connected = False
+        from datetime import datetime
+        account.last_activity = datetime.utcnow()
+        db.add(account)
+        await db.commit()
+        await db.refresh(account)
+
+        return {"status": "logged_out", "message": "Выход выполнен, сессия удалена"}
 
     async def get_dialogs(self, db: AsyncSession, user_id: int, account_id: int, limit: int = 50) -> Any:
         """

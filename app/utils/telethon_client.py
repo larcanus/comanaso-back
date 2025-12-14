@@ -287,6 +287,9 @@ class TelethonManager:
             except Exception as e:
                 self._logger.debug("logout error: %s", type(e).__name__)
                 raise TelethonManagerError(str(e))
+            finally:
+                # Очищаем phone_code_hash если был
+                self._phone_code_hashes.pop(account_id, None)
 
     async def get_dialogs(self, account_id: int, limit: int = 50) -> List[Dict[str, Any]]:
         """
