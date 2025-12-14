@@ -3,7 +3,7 @@ SQLAlchemy модель Telegram аккаунта.
 Хранит данные о подключенных Telegram аккаунтах.
 """
 from datetime import datetime
-from sqlalchemy import String, Integer, DateTime, Boolean, ForeignKey, Text
+from sqlalchemy import String, Integer, DateTime, Boolean, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -16,7 +16,7 @@ class Account(Base):
     Attributes:
         id: Уникальный идентификатор аккаунта
         user_id: ID владельца аккаунта
-        phone: Номер телефона (уникальный)
+        phone: Номер телефона
         api_id: Telegram API ID
         api_hash: Telegram API Hash
         session_string: Строка сессии Telethon (зашифрованная)
@@ -29,6 +29,9 @@ class Account(Base):
     """
 
     __tablename__ = "accounts"
+    __table_args__ = (
+        UniqueConstraint('user_id', 'phone', name='uq_user_phone'),
+    )
 
     # Primary key
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -44,7 +47,6 @@ class Account(Base):
     # Telegram данные
     phone: Mapped[str] = mapped_column(
         String(20),
-        unique=True,
         index=True,
         nullable=False
     )

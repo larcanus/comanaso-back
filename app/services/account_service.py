@@ -3,7 +3,7 @@
 Бизнес-логика CRUD операций с аккаунтами.
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 from typing import List
@@ -44,11 +44,16 @@ class AccountService:
             Account: Созданный аккаунт
 
         Raises:
-            HTTPException: Если номер телефона уже используется
+            HTTPException: Если номер телефона уже используется этим пользователем
         """
-        # Проверка существования номера
+        # Проверка существования номера у данного пользователя
         result = await db.execute(
-            select(Account).filter(Account.phone == account_data.phone)
+            select(Account).filter(
+                and_(
+                    Account.phone == account_data.phone,
+                    Account.user_id == user_id
+                )
+            )
         )
         existing = result.scalar_one_or_none()
 
@@ -57,7 +62,7 @@ class AccountService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "error": "ACCOUNT_ALREADY_EXISTS",
-                    "message": f"Аккаунт с номером {account_data.phone} уже существует"
+                    "message": f"У вас уже есть аккаунт с номером {account_data.phone}"
                 }
             )
 
@@ -172,12 +177,34 @@ class AccountService:
             Account: Обновленный аккаунт
 
         Raises:
-            HTTPException: Если аккаунт не найден
+            HTTPException: Если аккаунт не найден или номер уже используется
         """
         account = await AccountService.get_account(db, account_id, user_id)
 
         # Обновление только переданных полей
         update_data = account_data.model_dump(exclude_unset=True)
+
+        # Проверка уникальности телефона, если он обновляется
+        if 'phone' in update_data and update_data['phone'] != account.phone:
+            result = await db.execute(
+                select(Account).filter(
+                    and_(
+                        Account.phone == update_data['phone'],
+                        Account.user_id == user_id,
+                        Account.id != account_id
+                    )
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "PHONE_ALREADY_EXISTS",
+                        "message": f"У вас уже есть аккаунт с номером {update_data['phone']}"
+                    }
+                )
 
         for field, value in update_data.items():
             setattr(account, field, value)
@@ -298,7 +325,8 @@ class AccountService:
     @staticmethod
     async def get_account_by_phone(
         db: AsyncSession,
-        phone: str
+        phone: str,
+        user_id: int | None = None
     ) -> Account | None:
         """
         Получение аккаунта по номеру телефона.
@@ -306,13 +334,17 @@ class AccountService:
         Args:
             db: Асинхронная сессия БД
             phone: Номер телефона
+            user_id: ID пользователя (опционально, для фильтрации по владельцу)
 
         Returns:
             Account | None: Найденный аккаунт или None
         """
-        result = await db.execute(
-            select(Account).filter(Account.phone == phone)
-        )
+        query = select(Account).filter(Account.phone == phone)
+
+        if user_id is not None:
+            query = query.filter(Account.user_id == user_id)
+
+        result = await db.execute(query)
         return result.scalar_one_or_none()
 
 
