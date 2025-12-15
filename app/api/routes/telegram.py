@@ -12,6 +12,7 @@ from app.api.dependencies import (
     get_account,
     get_telethon_manager,
 )
+from app.models import User
 from app.utils.telethon_client import (
     TelethonManager,
     TelethonManagerError,
@@ -22,6 +23,11 @@ from app.models.account import Account
 from app.schemas.telegram_connection import (
     VerifyCodeRequest,
     VerifyPasswordRequest,
+)
+from app.schemas.telegram import (
+    AccountMeResponse,
+    FoldersResponse,
+    DialogsResponse,
 )
 
 router = APIRouter()
@@ -183,53 +189,62 @@ async def logout_account(
         )
 
 
-@router.get("/accounts/{account_id}/dialogs")
-async def get_dialogs(
+# ============================================================================
+# НОВЫЕ ЭНДПОИНТЫ ДЛЯ TELEGRAM DATA API
+# ============================================================================
+
+@router.get(
+    "/accounts/{account_id}/me",
+    response_model=AccountMeResponse,
+    summary="Получить информацию об аккаунте",
+)
+async def get_account_me(
         account_id: int,
-        limit: int = 50,
-        db: AsyncSession = Depends(get_db),
-        current_user: Any = Depends(get_current_user),
-        account: Account = Depends(get_account),
+        current_user: User = Depends(get_current_user),
         tm: TelethonManager = Depends(get_telethon_manager),
-) -> Any:
-    """Получить список диалогов Telegram-аккаунта."""
-    service = TelegramService(tm)
-    if account.id != account_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
-    try:
-        return await service.get_dialogs(db, current_user.id, account.id, limit=limit)
-    except InvalidApiCredentials as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)}
-        )
-    except TelethonManagerError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "TELETHON_ERROR", "message": str(e)}
-        )
+):
 
 
-@router.get("/accounts/{account_id}/folders")
-async def get_folders(
+
+
+@router.get(
+    "/accounts/{account_id}/dialogs",
+    response_model=DialogsResponse,
+    summary="Получить список диалогов",
+)
+async def get_account_dialogs(
         account_id: int,
-        db: AsyncSession = Depends(get_db),
-        current_user: Any = Depends(get_current_user),
-        account: Account = Depends(get_account),
+        limit: int,
+        offset: int,
+        archived: bool,
+        current_user: User = Depends(get_current_user),
         tm: TelethonManager = Depends(get_telethon_manager),
-) -> Any:
-    """Получить список папок Telegram-аккаунта."""
-    if account.id != account_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
-    try:
-        return await tm.get_folders(account.id)
-    except InvalidApiCredentials as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)}
-        )
-    except TelethonManagerError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "TELETHON_ERROR", "message": str(e)}
-        )
+):
+    """
+    Получить список диалогов Telegram аккаунта с полной информацией.
+
+    Параметры:
+    - limit: количество диалогов (1-500, по умолчанию 100)
+    - offset: смещение для пагинации
+    - archived: включить архивные диалоги (по умолчанию false)
+"""
+
+
+@router.get(
+    "/accounts/{account_id}/folders",
+    response_model=FoldersResponse,
+    summary="Получить список папок",
+)
+async def get_account_folders(
+        account_id: int,
+        current_user: User = Depends(get_current_user),
+        telegram_service: TelegramService = Depends(get_telegram_service)
+):
+    """
+    Получить список папок (фильтров) диалогов Telegram аккаунта.
+
+    Возвращает:
+    - Список всех папок включая дефолтную "Все чаты"
+    - Настройки каждой папки (фильтры, включенные/исключенные чаты)
+    - Закрепленные диалоги в каждой папке
+    """

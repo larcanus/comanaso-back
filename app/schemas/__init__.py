@@ -14,13 +14,28 @@ from app.schemas.account import (
     AccountDetailResponse,
     AccountListResponse
 )
-from app.schemas.telegram import (
-    SendCodeRequest,
+from app.schemas.telegram_connection import (
     VerifyCodeRequest,
-    TelegramDialog,
-    TelegramFolder,
+    VerifyCodeResponse,
+    VerifyPasswordRequest,
+    VerifyPasswordResponse,
+    DisconnectResponse,
+    ConnectResponse,
+    ErrorResponse,
+)
+from app.schemas.telegram import (
+    ErrorResponse,
+    DialogSchema,
+    FolderSchema,
     DialogsResponse,
-    ConnectionStatusResponse
+    FoldersResponse,
+    PhotoSchema,
+    UserStatusSchema,
+    AccountMeResponse,
+    LastMessageSchema,
+    EntityUserSchema,
+    EntityGroupSchema,
+    EntityChannelSchema,
 )
 
 __all__ = [
@@ -36,11 +51,24 @@ __all__ = [
     "AccountResponse",
     "AccountDetailResponse",
     "AccountListResponse",
-    # Telegram
-    "SendCodeRequest",
+    # Telegram connection
     "VerifyCodeRequest",
-    "TelegramDialog",
-    "TelegramFolder",
+    "VerifyCodeResponse",
+    "VerifyPasswordRequest",
+    "VerifyPasswordResponse",
+    "DisconnectResponse",
+    "ConnectResponse",
+    # Telegram data
+    "ErrorResponse",
+    "DialogSchema",
+    "FolderSchema",
     "DialogsResponse",
-    "ConnectionStatusResponse",
+    "FoldersResponse",
+    "PhotoSchema",
+    "UserStatusSchema",
+    "AccountMeResponse",
+    "LastMessageSchema",
+    "EntityUserSchema",
+    "EntityGroupSchema",
+    "EntityChannelSchema",
 ]
