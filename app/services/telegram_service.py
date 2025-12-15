@@ -1,6 +1,6 @@
 # File: app/services/telegram_service.py
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import logging
 from datetime import datetime, timezone
 
@@ -412,6 +412,115 @@ class TelegramService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"error": "NOT_CONNECTED", "message": "Клиент не подключён/не авторизован"}
+            )
+        except FloodWait as e:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": getattr(e, "seconds", None)}
+            )
+        except TelethonManagerError as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"error": "TELETHON_ERROR", "message": str(e)}
+            )
+
+    async def get_me(self, db: AsyncSession, user_id: int, account_id: int) -> Dict[str, Any]:
+        """
+        Получить информацию о текущем пользователе Telegram аккаунта.
+        """
+        account = await self._get_account(db, account_id, user_id)
+
+        # Проверяем что аккаунт подключен
+        if not account.is_connected:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "ACCOUNT_NOT_CONNECTED", "message": "Аккаунт не подключен к Telegram"}
+            )
+
+        try:
+            me_data = await self.tm.get_me(account_id)
+            return me_data
+        except NotConnected:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "ACCOUNT_NOT_CONNECTED", "message": "Аккаунт не подключен к Telegram"}
+            )
+        except FloodWait as e:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": getattr(e, "seconds", None)}
+            )
+        except TelethonManagerError as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"error": "TELETHON_ERROR", "message": str(e)}
+            )
+
+    async def get_dialogs_extended(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        account_id: int,
+        limit: int = 100,
+        offset: int = 0,
+        archived: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Получить расширенный список диалогов с полной информацией.
+        """
+        account = await self._get_account(db, account_id, user_id)
+
+        # Проверяем что аккаунт подключен
+        if not account.is_connected:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "ACCOUNT_NOT_CONNECTED", "message": "Аккаунт не подключен к Telegram"}
+            )
+
+        try:
+            dialogs_data = await self.tm.get_dialogs_extended(
+                account_id=account_id,
+                limit=min(limit, 500),  # Ограничиваем максимум 500
+                offset=offset,
+                archived=archived
+            )
+            return dialogs_data
+        except NotConnected:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "ACCOUNT_NOT_CONNECTED", "message": "Аккаунт не подключен к Telegram"}
+            )
+        except FloodWait as e:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": getattr(e, "seconds", None)}
+            )
+        except TelethonManagerError as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"error": "TELETHON_ERROR", "message": str(e)}
+            )
+
+    async def get_folders(self, db: AsyncSession, user_id: int, account_id: int) -> List[Dict[str, Any]]:
+        """
+        Получить список папок (фильтров) диалогов.
+        """
+        account = await self._get_account(db, account_id, user_id)
+
+        # Проверяем что аккаунт подключен
+        if not account.is_connected:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "ACCOUNT_NOT_CONNECTED", "message": "Аккаунт не подключен к Telegram"}
+            )
+
+        try:
+            folders_data = await self.tm.get_folders(account_id)
+            return folders_data
+        except NotConnected:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "ACCOUNT_NOT_CONNECTED", "message": "Аккаунт не подключен к Telegram"}
             )
         except FloodWait as e:
             raise HTTPException(

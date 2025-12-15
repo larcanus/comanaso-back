@@ -1,16 +1,16 @@
 """
 API роутер для управления сессией telethon.
 """
-from typing import Any, Dict
+from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
     get_db,
     get_current_user,
     get_account,
-    get_telethon_manager,
+    get_telethon_manager, get_telegram_service,
 )
 from app.models import User
 from app.utils.telethon_client import (
@@ -26,7 +26,7 @@ from app.schemas.telegram_connection import (
 )
 from app.schemas.telegram import (
     AccountMeResponse,
-    FoldersResponse,
+    FolderSchema,
     DialogsResponse,
 )
 
@@ -194,57 +194,95 @@ async def logout_account(
 # ============================================================================
 
 @router.get(
-    "/accounts/{account_id}/me",
+    "/{account_id}/me",
     response_model=AccountMeResponse,
     summary="Получить информацию об аккаунте",
+    description="Возвращает информацию о текущем пользователе Telegram аккаунта"
 )
 async def get_account_me(
         account_id: int,
         current_user: User = Depends(get_current_user),
-        tm: TelethonManager = Depends(get_telethon_manager),
-):
+        db: AsyncSession = Depends(get_db),
+        service: TelegramService = Depends(get_telegram_service)
+) -> AccountMeResponse:
+    """
+    Получить информацию о текущем пользователе Telegram аккаунта.
 
+    **Требования:**
+    - Аккаунт должен быть подключен к Telegram
+    - Пользователь должен быть владельцем аккаунта
 
+    **Возвращает:**
+    - Полную информацию о пользователе (имя, username, статус, фото и т.д.)
+    """
+    me_data = await service.get_me(db, current_user.id, account_id)
+    return AccountMeResponse(**me_data)
 
 
 @router.get(
-    "/accounts/{account_id}/dialogs",
+    "/{account_id}/dialogs",
     response_model=DialogsResponse,
     summary="Получить список диалогов",
+    description="Возвращает расширенный список диалогов с полной информацией"
 )
 async def get_account_dialogs(
         account_id: int,
-        limit: int,
-        offset: int,
-        archived: bool,
+        limit: int = Query(default=100, ge=1, le=500, description="Количество диалогов"),
+        offset: int = Query(default=0, ge=0, description="Смещение для пагинации"),
+        archived: bool = Query(default=False, description="Включить архивные диалоги"),
         current_user: User = Depends(get_current_user),
-        tm: TelethonManager = Depends(get_telethon_manager),
-):
+        db: AsyncSession = Depends(get_db),
+        service: TelegramService = Depends(get_telegram_service)
+) -> DialogsResponse:
     """
-    Получить список диалогов Telegram аккаунта с полной информацией.
+    Получить список диалогов с полной информацией.
 
-    Параметры:
-    - limit: количество диалогов (1-500, по умолчанию 100)
-    - offset: смещение для пагинации
-    - archived: включить архивные диалоги (по умолчанию false)
-"""
+    **Параметры:**
+    - `limit`: Количество диалогов (максимум 500)
+    - `offset`: Смещение для пагинации
+    - `archived`: Включить архивные диалоги
+
+    **Требования:**
+    - Аккаунт должен быть подключен к Telegram
+    - Пользователь должен быть владельцем аккаунта
+
+    **Возвращает:**
+    - Список диалогов с детальной информацией о каждом
+    - Информацию о пагинации (total, hasMore)
+    """
+    dialogs_data = await service.get_dialogs_extended(
+        db=db,
+        user_id=current_user.id,
+        account_id=account_id,
+        limit=limit,
+        offset=offset,
+        archived=archived
+    )
+    return DialogsResponse(**dialogs_data)
 
 
 @router.get(
-    "/accounts/{account_id}/folders",
-    response_model=FoldersResponse,
+    "/{account_id}/folders",
+    response_model=List[FolderSchema],
     summary="Получить список папок",
+    description="Возвращает список папок (фильтров) диалогов"
 )
 async def get_account_folders(
         account_id: int,
         current_user: User = Depends(get_current_user),
-        telegram_service: TelegramService = Depends(get_telegram_service)
-):
+        db: AsyncSession = Depends(get_db),
+        service: TelegramService = Depends(get_telegram_service)
+) -> List[FolderSchema]:
     """
-    Получить список папок (фильтров) диалогов Telegram аккаунта.
+    Получить список папок (фильтров) диалогов.
 
-    Возвращает:
+    **Требования:**
+    - Аккаунт должен быть подключен к Telegram
+    - Пользователь должен быть владельцем аккаунта
+
+    **Возвращает:**
     - Список всех папок включая дефолтную "Все чаты"
-    - Настройки каждой папки (фильтры, включенные/исключенные чаты)
-    - Закрепленные диалоги в каждой папке
+    - Настройки каждой папки (фильтры, закрепленные чаты и т.д.)
     """
+    folders_data = await service.get_folders(db, current_user.id, account_id)
+    return [FolderSchema(**folder) for folder in folders_data]

@@ -30,12 +30,8 @@ from app.schemas.telegram import (
     DialogsResponse,
     FoldersResponse,
     PhotoSchema,
-    UserStatusSchema,
     AccountMeResponse,
     LastMessageSchema,
-    EntityUserSchema,
-    EntityGroupSchema,
-    EntityChannelSchema,
 )
 
 __all__ = [
@@ -65,10 +61,6 @@ __all__ = [
     "DialogsResponse",
     "FoldersResponse",
     "PhotoSchema",
-    "UserStatusSchema",
     "AccountMeResponse",
     "LastMessageSchema",
-    "EntityUserSchema",
-    "EntityGroupSchema",
-    "EntityChannelSchema",
 ]

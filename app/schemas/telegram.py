@@ -1,310 +1,156 @@
 """
-Pydantic схемы для Telegram API.
-Схемы для получения данных: профиль, диалоги, папки и соединения аккаунта.
+Pydantic схемы для Telegram Data API
 """
+from typing import Optional, List, Any
 from pydantic import BaseModel, Field
-from typing import Optional, Literal, List
 from datetime import datetime
 
 
+# ============================================================================
+# COMMON SCHEMAS
+# ============================================================================
+
 class PhotoSchema(BaseModel):
-    """Схема фото профиля/чата."""
-    photoId: str
-    dcId: int
-    hasVideo: bool = False
+    """Схема фото профиля"""
+    photoId: str = Field(..., description="ID фото")
+    dcId: int = Field(..., description="ID дата-центра")
+    hasVideo: bool = Field(False, description="Есть ли видео аватар")
 
 
-class UserStatusSchema(BaseModel):
-    """Схема статуса пользователя."""
-    type: Literal["online", "offline", "recently", "lastWeek", "lastMonth"]
-    wasOnline: Optional[datetime] = None
+class StatusSchema(BaseModel):
+    """Схема статуса пользователя"""
+    type: str = Field(..., description="Тип статуса: online, offline, recently, lastWeek, lastMonth")
+    wasOnline: Optional[str] = Field(None, description="Время последнего онлайна (ISO 8601)")
 
 
 # ============================================================================
-# 4.1 GET /api/accounts/{accountId}/me
+# ACCOUNT ME SCHEMAS
 # ============================================================================
 
 class AccountMeResponse(BaseModel):
-    """Ответ с информацией об аккаунте."""
-    id: str
-    firstName: Optional[str] = None
-    lastName: Optional[str] = None
-    username: Optional[str] = None
-    phone: str
-    bio: Optional[str] = None
-    isBot: bool = False
-    isVerified: bool = False
-    isPremium: bool = False
-    langCode: Optional[str] = None
-    photo: Optional[PhotoSchema] = None
-    status: Optional[UserStatusSchema] = None
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "id": "123456789",
-                "firstName": "Иван",
-                "lastName": "Петров",
-                "username": "ivan_petrov",
-                "phone": "+79991234567",
-                "bio": "Работаю в IT",
-                "isBot": False,
-                "isVerified": False,
-                "isPremium": False,
-                "langCode": "ru",
-                "photo": {
-                    "photoId": "123456789012345678",
-                    "dcId": 2,
-                    "hasVideo": False
-                },
-                "status": {
-                    "type": "online",
-                    "wasOnline": None
-                }
-            }
-        }
-    }
+    """Схема ответа с информацией об аккаунте"""
+    id: int = Field(..., description="ID пользователя в Telegram")
+    firstName: str = Field(..., description="Имя")
+    lastName: str = Field("", description="Фамилия")
+    username: Optional[str] = Field(None, description="Username")
+    phone: Optional[str] = Field(None, description="Номер телефона")
+    bio: Optional[str] = Field(None, description="Описание профиля")
+    isBot: bool = Field(False, description="Является ли ботом")
+    isVerified: bool = Field(False, description="Верифицирован ли аккаунт")
+    isPremium: bool = Field(False, description="Есть ли Premium подписка")
+    langCode: Optional[str] = Field(None, description="Код языка")
+    photo: Optional[PhotoSchema] = Field(None, description="Фото профиля")
+    status: StatusSchema = Field(..., description="Статус пользователя")
 
 
 # ============================================================================
-# 4.2 GET /api/accounts/{accountId}/dialogs
+# DIALOGS SCHEMAS
 # ============================================================================
 
 class LastMessageSchema(BaseModel):
-    """Последнее сообщение в диалоге."""
-    id: int
-    text: Optional[str] = None
-    date: datetime
-    fromId: Optional[int] = None
-    out: bool
-    mentioned: bool = False
-    mediaUnread: bool = False
-    silent: bool = False
+    """Схема последнего сообщения в диалоге"""
+    id: int = Field(..., description="ID сообщения")
+    text: str = Field("", description="Текст сообщения")
+    date: Optional[str] = Field(None, description="Дата сообщения (ISO 8601)")
+    fromId: Optional[int] = Field(None, description="ID отправителя")
+    out: bool = Field(False, description="Исходящее сообщение")
+    mentioned: bool = Field(False, description="Есть упоминание")
+    mediaUnread: bool = Field(False, description="Медиа не просмотрено")
+    silent: bool = Field(False, description="Тихое сообщение")
 
 
-class EntityUserSchema(BaseModel):
-    """Детали пользователя/бота."""
-    firstName: Optional[str] = None
-    lastName: Optional[str] = None
-    username: Optional[str] = None
-    phone: Optional[str] = None
-    isBot: bool = False
-    isVerified: bool = False
-    isPremium: bool = False
-    isContact: bool = False
-    isMutualContact: bool = False
-    photo: Optional[PhotoSchema] = None
-    status: Optional[UserStatusSchema] = None
+class UserEntitySchema(BaseModel):
+    """Схема сущности пользователя/бота"""
+    firstName: str = Field("", description="Имя")
+    lastName: str = Field("", description="Фамилия")
+    username: Optional[str] = Field(None, description="Username")
+    phone: Optional[str] = Field(None, description="Номер телефона")
+    isBot: bool = Field(False, description="Является ли ботом")
+    isVerified: bool = Field(False, description="Верифицирован")
+    isPremium: bool = Field(False, description="Premium подписка")
+    isContact: bool = Field(False, description="В контактах")
+    isMutualContact: bool = Field(False, description="Взаимный контакт")
+    photo: Optional[PhotoSchema] = Field(None, description="Фото профиля")
+    status: StatusSchema = Field(..., description="Статус")
 
 
-class EntityGroupSchema(BaseModel):
-    """Детали группы."""
-    title: str
-    participantsCount: int
-    createdDate: Optional[datetime] = None
-    isCreator: bool = False
-    isAdmin: bool = False
-    photo: Optional[PhotoSchema] = None
+class GroupEntitySchema(BaseModel):
+    """Схема сущности группы"""
+    title: str = Field(..., description="Название группы")
+    participantsCount: int = Field(0, description="Количество участников")
+    createdDate: Optional[str] = Field(None, description="Дата создания (ISO 8601)")
+    isCreator: bool = Field(False, description="Является создателем")
+    isAdmin: bool = Field(False, description="Является администратором")
+    photo: Optional[PhotoSchema] = Field(None, description="Фото группы")
 
 
-class EntityChannelSchema(BaseModel):
-    """Детали канала/мегагруппы."""
-    title: str
-    username: Optional[str] = None
-    participantsCount: Optional[int] = None
-    createdDate: Optional[datetime] = None
-    isCreator: bool = False
-    isAdmin: bool = False
-    isBroadcast: bool = True
-    isVerified: bool = False
-    isScam: bool = False
-    isFake: bool = False
-    hasGeo: bool = False
-    slowmodeEnabled: bool = False
-    photo: Optional[PhotoSchema] = None
+class ChannelEntitySchema(BaseModel):
+    """Схема сущности канала/мегагруппы"""
+    title: str = Field(..., description="Название канала")
+    username: Optional[str] = Field(None, description="Username канала")
+    participantsCount: int = Field(0, description="Количество подписчиков")
+    createdDate: Optional[str] = Field(None, description="Дата создания (ISO 8601)")
+    isCreator: bool = Field(False, description="Является создателем")
+    isAdmin: bool = Field(False, description="Является администратором")
+    isBroadcast: bool = Field(True, description="Является каналом (не мегагруппой)")
+    isVerified: bool = Field(False, description="Верифицирован")
+    isScam: bool = Field(False, description="Помечен как скам")
+    isFake: bool = Field(False, description="Помечен как фейк")
+    hasGeo: bool = Field(False, description="Имеет геолокацию")
+    slowmodeEnabled: bool = Field(False, description="Включен медленный режим")
+    photo: Optional[PhotoSchema] = Field(None, description="Фото канала")
 
 
 class DialogSchema(BaseModel):
-    """Схема одного диалога."""
-    id: str
-    name: str
-    type: Literal["user", "bot", "group", "channel", "megagroup"]
-    date: datetime
-
-    # Счётчики
-    unreadCount: int = 0
-    unreadMentionsCount: int = 0
-    unreadReactionsCount: int = 0
-
-    # Статусы
-    isArchived: bool = False
-    isPinned: bool = False
-    isMuted: bool = False
-
-    # Папка
-    folderId: Optional[int] = None
-
-    # Последнее сообщение
-    lastMessage: Optional[LastMessageSchema] = None
-
-    # Детали сущности (union type)
-    entity: EntityUserSchema | EntityGroupSchema | EntityChannelSchema
+    """Схема диалога"""
+    id: str = Field(..., description="ID диалога")
+    name: str = Field(..., description="Название диалога")
+    type: str = Field(..., description="Тип: user, bot, group, channel, megagroup")
+    date: Optional[str] = Field(None, description="Дата последнего сообщения (ISO 8601)")
+    unreadCount: int = Field(0, description="Количество непрочитанных")
+    unreadMentionsCount: int = Field(0, description="Количество непрочитанных упоминаний")
+    unreadReactionsCount: int = Field(0, description="Количество непрочитанных реакций")
+    isArchived: bool = Field(False, description="В архиве")
+    isPinned: bool = Field(False, description="Закреплен")
+    isMuted: bool = Field(False, description="Отключены уведомления")
+    folderId: Optional[int] = Field(None, description="ID папки")
+    lastMessage: Optional[LastMessageSchema] = Field(None, description="Последнее сообщение")
+    entity: Any = Field(..., description="Детали сущности (зависит от типа)")
 
 
 class DialogsResponse(BaseModel):
-    """Ответ со списком диалогов."""
-    total: int
-    hasMore: bool
-    dialogs: List[DialogSchema]
-    
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "total": 150,
-                "hasMore": True,
-                "dialogs": [
-                    {
-                        "id": "1234567890",
-                        "name": "Иван Петров",
-                        "type": "user",
-                        "date": "2024-01-17T15:30:00Z",
-                        "unreadCount": 3,
-                        "unreadMentionsCount": 1,
-                        "unreadReactionsCount": 0,
-                        "isArchived": False,
-                        "isPinned": True,
-                        "isMuted": False,
-                        "folderId": None,
-                        "lastMessage": {
-                            "id": 12345,
-                            "text": "Привет, как дела?",
-                            "date": "2024-01-17T15:30:00Z",
-                            "fromId": 987654321,
-                            "out": False,
-                            "mentioned": False,
-                            "mediaUnread": False,
-                            "silent": False
-                        },
-                        "entity": {
-                            "firstName": "Иван",
-                            "lastName": "Петров",
-                            "username": "ivan_petrov",
-                            "phone": "+79991234567",
-                            "isBot": False,
-                            "isVerified": False,
-                            "isPremium": False,
-                            "isContact": True,
-                            "isMutualContact": True,
-                            "photo": {
-                                "photoId": "123456789012345678",
-                                "dcId": 2,
-                                "hasVideo": False
-                            },
-                            "status": {
-                                "type": "online",
-                                "wasOnline": None
-                            }
-                        }
-                    }
-                ]
-            }
-        }
-    }
+    """Схема ответа со списком диалогов"""
+    total: int = Field(..., description="Общее количество диалогов")
+    hasMore: bool = Field(False, description="Есть ли еще диалоги")
+    dialogs: List[DialogSchema] = Field(default_factory=list, description="Список диалогов")
 
 
 # ============================================================================
-# 4.3 GET /api/accounts/{accountId}/folders
+# FOLDERS SCHEMAS
 # ============================================================================
 
 class FolderSchema(BaseModel):
-    """Схема папки Telegram."""
-    id: int
-    title: str
-    isDefault: bool = False
-    emoji: Optional[str] = None
-    pinnedDialogIds: List[str] = Field(default_factory=list)
-    includedChatIds: List[str] = Field(default_factory=list)
-    excludedChatIds: List[str] = Field(default_factory=list)
-    contacts: bool = False
-    nonContacts: bool = False
-    groups: bool = False
-    broadcasts: bool = False
-    bots: bool = False
-    excludeMuted: bool = False
-    excludeRead: bool = False
-    excludeArchived: bool = False
-    
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "id": 1,
-                "title": "Работа",
-                "isDefault": False,
-                "emoji": "💼",
-                "pinnedDialogIds": ["1234567890", "9876543210"],
-                "includedChatIds": ["1234567890", "9876543210", "5555555555"],
-                "excludedChatIds": [],
-                "contacts": False,
-                "nonContacts": False,
-                "groups": True,
-                "broadcasts": False,
-                "bots": False,
-                "excludeMuted": False,
-                "excludeRead": False,
-                "excludeArchived": True
-            }
-        }
-    }
+    """Схема папки диалогов"""
+    id: int = Field(..., description="ID папки (0 для дефолтной)")
+    title: str = Field(..., description="Название папки")
+    isDefault: bool = Field(False, description="Дефолтная папка")
+    emoji: Optional[str] = Field(None, description="Эмодзи папки")
+    pinnedDialogIds: List[str] = Field(default_factory=list, description="ID закрепленных диалогов")
+    includedChatIds: List[str] = Field(default_factory=list, description="ID включенных чатов")
+    excludedChatIds: List[str] = Field(default_factory=list, description="ID исключенных чатов")
+    contacts: bool = Field(False, description="Включить контакты")
+    nonContacts: bool = Field(False, description="Включить не-контакты")
+    groups: bool = Field(False, description="Включить группы")
+    broadcasts: bool = Field(False, description="Включить каналы")
+    bots: bool = Field(False, description="Включить ботов")
+    excludeMuted: bool = Field(False, description="Исключить беззвучные")
+    excludeRead: bool = Field(False, description="Исключить прочитанные")
+    excludeArchived: bool = Field(False, description="Исключить архивные")
 
 
 class FoldersResponse(BaseModel):
-    """Ответ со списком папок."""
-    folders: List[FolderSchema] = Field(default_factory=list)
-    
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "folders": [
-                    {
-                        "id": 0,
-                        "title": "Все чаты",
-                        "isDefault": True,
-                        "emoji": None,
-                        "pinnedDialogIds": [],
-                        "includedChatIds": [],
-                        "excludedChatIds": [],
-                        "contacts": False,
-                        "nonContacts": False,
-                        "groups": False,
-                        "broadcasts": False,
-                        "bots": False,
-                        "excludeMuted": False,
-                        "excludeRead": False,
-                        "excludeArchived": False
-                    },
-                    {
-                        "id": 1,
-                        "title": "Работа",
-                        "isDefault": False,
-                        "emoji": "💼",
-                        "pinnedDialogIds": ["1234567890"],
-                        "includedChatIds": ["1234567890", "9876543210"],
-                        "excludedChatIds": [],
-                        "contacts": False,
-                        "nonContacts": False,
-                        "groups": True,
-                        "broadcasts": False,
-                        "bots": False,
-                        "excludeMuted": False,
-                        "excludeRead": False,
-                        "excludeArchived": True
-                    }
-                ]
-            }
-        }
-    }
-
-
+    """Схема ответа со списком папок"""
+    folders: List[FolderSchema] = Field(default_factory=list, description="Список папок")
 
 
 # ============================================================================

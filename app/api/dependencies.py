@@ -17,6 +17,7 @@ from sqlalchemy import select
 from app.database import get_db
 from app.models.account import Account
 from app.models.user import User
+from app.services import TelegramService
 from app.utils.jwt import decode_access_token
 from app.services.auth_service import AuthService
 from app.utils.telethon_client import TelethonManager
@@ -129,6 +130,10 @@ def get_telethon_manager(request: Request) -> TelethonManager:
         request.app.state.telethon_manager = tm
     return tm
 
+def get_telegram_service(db: AsyncSession = Depends(get_db)) -> TelegramService:
+    """Dependency для получения TelegramService"""
+    tm = TelethonManager()
+    return TelegramService(tm)
 
 # Типизированная зависимость для удобства
 CurrentUser = Annotated[User, Depends(get_current_user)]
