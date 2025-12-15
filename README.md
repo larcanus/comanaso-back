@@ -4,7 +4,7 @@
 ## Общая информация
 
 **Backend**: Python + FastAPI  
-**Telegram Library**: Telethon  
+**Telegram Library**: Telethon 1.38.1  
 **Authentication**: JWT (Bearer Token)  
 **Base URL**: `http://localhost:8000/api` (dev)
 
@@ -204,7 +204,7 @@ Request:
 {
   "name": "Обновленное название",   // опционально
   "apiId": "12345678",              // опционально
-  "apiHash": "new_hash"             // опционально
+  "apiHash": "new_hash",            // опционально
   "phoneNumber": "+79991234567"     // опционально
 }
 
@@ -304,7 +304,7 @@ Request:
 Response 200 (успех без 2FA):
 {
   "status": "connected",
-  "message": "Аккаунт успешно подключен",
+  "message": "Аккаунт успешно подключен"
 }
 
 Response 200 (нужен 2FA):
@@ -399,9 +399,51 @@ Response 404:
 
 ---
 
-## 4. DIALOGS (Диалоги)
+## 4. TELEGRAM DATA (MVP)
 
-### 4.1 Получить список диалогов
+### 4.1 Получить информацию об аккаунте
+
+```http
+GET /api/accounts/{accountId}/me
+Authorization: Bearer {token}
+
+Response 200:
+{
+  "id": 123456789,
+  "firstName": "Иван",
+  "lastName": "Петров",
+  "username": "ivan_petrov",
+  "phone": "+79991234567",
+  "bio": "Описание профиля",
+  "isBot": false,
+  "isVerified": false,
+  "isPremium": true,
+  "langCode": "ru",
+  "photo": {
+    "photoId": "5472634066516587521",
+    "dcId": 2,
+    "hasVideo": false
+  },
+  "status": {
+    "type": "online",  // online | offline | recently | lastWeek | lastMonth
+    "wasOnline": "2024-01-17T15:30:00Z"  // если не online
+  }
+}
+
+Response 403:
+{
+  "error": "ACCOUNT_NOT_CONNECTED",
+  "message": "Аккаунт не подключен к Telegram"
+}
+
+Response 404:
+{
+  "error": "ACCOUNT_NOT_FOUND",
+  "message": "Аккаунт не найден"
+}
+```
+
+### 4.2 Получить список диалогов
 
 ```http
 GET /api/accounts/{accountId}/dialogs
@@ -409,45 +451,90 @@ Authorization: Bearer {token}
 Query Parameters:
   - limit: integer (default: 100, max: 500)
   - offset: integer (default: 0)
+  - archived: boolean (default: false) // включить архивные
 
 Response 200:
 {
   "total": 245,
+  "hasMore": true,
   "dialogs": [
     {
-      "id": "1234567890",           // Telegram chat ID
+      "id": "1234567890",
       "name": "Иван Петров",
-      "type": "user",               // user | group | channel | bot
+      "type": "user",  // user | bot | group | channel | megagroup
+      "date": "2024-01-17T15:30:00Z",  // дата последнего сообщения
+      
+      // Счётчики
       "unreadCount": 3,
-      "lastMessage": {
-        "text": "Привет, как дела?",
-        "date": "2024-01-17T15:30:00Z",
-        "fromId": 987654321
-      },
-      "photo": "https://cdn.telegram.org/...",  // URL аватара (если есть)
-      "username": "ivan_petrov",    // username (если есть)
+      "unreadMentionsCount": 1,
+      "unreadReactionsCount": 0,
+      
+      // Статусы
       "isArchived": false,
       "isPinned": true,
       "isMuted": false,
-      "folderId": null              // ID папки (если в папке)
-    },
-    {
-      "id": "9876543210",
-      "name": "Рабочая группа",
-      "type": "group",
-      "unreadCount": 0,
+      
+      // Папка
+      "folderId": null,  // null = главная папка, 0+ = ID папки
+      
+      // Последнее сообщение
       "lastMessage": {
-        "text": "Документы отправлены",
-        "date": "2024-01-17T14:20:00Z",
-        "fromId": 111222333
+        "id": 67890,
+        "text": "Привет, как дела?",
+        "date": "2024-01-17T15:30:00Z",
+        "fromId": 987654321,
+        "out": false,  // исходящее или входящее
+        "mentioned": false,
+        "mediaUnread": false,
+        "silent": false
       },
-      "photo": null,
-      "username": null,
-      "isArchived": false,
-      "isPinned": false,
-      "isMuted": true,
-      "folderId": 1
-    }
+      
+      // Детали сущности (зависит от типа)
+      "entity": {
+        // Для user/bot:
+        "firstName": "Иван",
+        "lastName": "Петров",
+        "username": "ivan_petrov",
+        "phone": "+79991234567",
+        "isBot": false,
+        "isVerified": false,
+        "isPremium": true,
+        "isContact": true,
+        "isMutualContact": true,
+        "photo": {
+          "photoId": "...",
+          "dcId": 2
+        },
+        "status": {
+          "type": "online",
+          "wasOnline": "2024-01-17T15:30:00Z"
+        },
+        
+        // Для group:
+        "title": "Рабочая группа",
+        "participantsCount": 45,
+        "createdDate": "2023-05-10T10:00:00Z",
+        "isCreator": false,
+        "isAdmin": true,
+        "photo": { /* ... */ },
+        
+        // Для channel/megagroup:
+        "title": "Новости компании",
+        "username": "company_news",
+        "participantsCount": 15000,
+        "createdDate": "2022-03-15T08:00:00Z",
+        "isCreator": false,
+        "isAdmin": false,
+        "isBroadcast": true,  // true = канал, false = мегагруппа
+        "isVerified": true,
+        "isScam": false,
+        "isFake": false,
+        "hasGeo": false,
+        "slowmodeEnabled": false,
+        "photo": { /* ... */ }
+      }
+    },
+    // ... остальные диалоги
   ]
 }
 
@@ -464,34 +551,7 @@ Response 404:
 }
 ```
 
-### 4.2 Получить статистику по диалогам
-
-```http
-GET /api/accounts/{accountId}/dialogs/stats
-Authorization: Bearer {token}
-
-Response 200:
-{
-  "total": 245,
-  "byType": {
-    "user": 180,
-    "group": 35,
-    "channel": 25,
-    "bot": 5
-  },
-  "unreadTotal": 47,
-  "archived": 12,
-  "pinned": 8,
-  "muted": 23,
-  "inFolders": 56
-}
-```
-
----
-
-## 5. FOLDERS (Папки)
-
-### 5.1 Получить список папок
+### 4.3 Получить список папок
 
 ```http
 GET /api/accounts/{accountId}/folders
@@ -500,30 +560,55 @@ Authorization: Bearer {token}
 Response 200:
 [
   {
+    "id": 0,
+    "title": "Все чаты",
+    "isDefault": true,
+    "emoji": null,
+    "pinnedDialogIds": [],
+    "includedChatIds": [],
+    "excludedChatIds": [],
+    "contacts": false,
+    "nonContacts": false,
+    "groups": false,
+    "broadcasts": false,
+    "bots": false,
+    "excludeMuted": false,
+    "excludeRead": false,
+    "excludeArchived": false
+  },
+  {
     "id": 1,
     "title": "Работа",
+    "isDefault": false,
     "emoji": "💼",
-    "pinnedDialogs": ["1234567890", "9876543210"],
-    "includedChats": ["1234567890", "9876543210", "5555555555"],
-    "excludedChats": [],
-    "includeContacts": false,
-    "includeNonContacts": false,
-    "includeGroups": true,
-    "includeChannels": false,
-    "includeBots": false
+    "pinnedDialogIds": ["1234567890", "9876543210"],
+    "includedChatIds": ["1234567890", "9876543210", "5555555555"],
+    "excludedChatIds": [],
+    "contacts": false,
+    "nonContacts": false,
+    "groups": true,
+    "broadcasts": false,
+    "bots": false,
+    "excludeMuted": false,
+    "excludeRead": false,
+    "excludeArchived": true
   },
   {
     "id": 2,
     "title": "Личное",
+    "isDefault": false,
     "emoji": "👤",
-    "pinnedDialogs": [],
-    "includedChats": [],
-    "excludedChats": [],
-    "includeContacts": true,
-    "includeNonContacts": false,
-    "includeGroups": false,
-    "includeChannels": false,
-    "includeBots": false
+    "pinnedDialogIds": [],
+    "includedChatIds": [],
+    "excludedChatIds": [],
+    "contacts": true,
+    "nonContacts": false,
+    "groups": false,
+    "broadcasts": false,
+    "bots": false,
+    "excludeMuted": false,
+    "excludeRead": false,
+    "excludeArchived": false
   }
 ]
 
@@ -532,38 +617,17 @@ Response 403:
   "error": "ACCOUNT_NOT_CONNECTED",
   "message": "Аккаунт не подключен к Telegram"
 }
-```
 
-### 5.2 Получить рекомендуемые папки
-
-```http
-GET /api/accounts/{accountId}/folders/suggested
-Authorization: Bearer {token}
-
-Response 200:
-[
-  {
-    "title": "Непрочитанные",
-    "emoji": "📬",
-    "description": "Все непрочитанные чаты",
-    "filter": {
-      "includeUnread": true
-    }
-  },
-  {
-    "title": "Группы",
-    "emoji": "👥",
-    "description": "Все групповые чаты",
-    "filter": {
-      "includeGroups": true
-    }
-  }
-]
+Response 404:
+{
+  "error": "ACCOUNT_NOT_FOUND",
+  "message": "Аккаунт не найден"
+}
 ```
 
 ---
 
-## 7. ERROR CODES
+## 5. ERROR CODES
 
 ### Общие ошибки
 
@@ -598,189 +662,9 @@ Response 200:
 
 ---
 
----
+## 6. BACKEND IMPLEMENTATION HINTS (для Python/FastAPI)
 
-## 9. ИНТЕГРАЦИЯ С FRONTEND
-
-### 9.1 Обновить [connection.js](file://D:/projects/vue/comanaso/src/utils/connection.js)
-
-```javascript:D:/projects/vue/comanaso/src/utils/connection.js
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
-function getAuthHeaders() {
-    const token = localStorage.getItem('authToken');
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': token ? `Bearer ${token}` : ''
-    };
-}
-
-// Выход из системы (разлогин пользователя)
-export async function logout() {
-    const result = await apiRequest('/auth/logout', {
-        method: 'POST'
-    });
-    localStorage.removeItem('authToken');
-    return result;
-}
-
-async function apiRequest(endpoint, options = {}) {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers: {
-            ...getAuthHeaders(),
-            ...options.headers
-        }
-    });
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'API Error');
-    }
-
-    return response.json();
-}
-
-// Подключение аккаунта
-export async function connectAccount(accountId) {
-    return apiRequest(`/accounts/${accountId}/connect`, {
-        method: 'POST'
-    });
-}
-
-// Подтверждение кода
-export async function verifyCode(accountId, code, phoneCodeHash) {
-    return apiRequest(`/accounts/${accountId}/verify-code`, {
-        method: 'POST',
-        body: JSON.stringify({ code, phoneCodeHash })
-    });
-}
-
-// Подтверждение пароля 2FA
-export async function verifyPassword(accountId, password) {
-    return apiRequest(`/accounts/${accountId}/verify-password`, {
-        method: 'POST',
-        body: JSON.stringify({ password })
-    });
-}
-
-// Отключение аккаунта
-export async function disconnectAccount(accountId) {
-    return apiRequest(`/accounts/${accountId}/disconnect`, {
-        method: 'POST'
-    });
-}
-
-// Получение диалогов
-export async function getDialogs(accountId, limit = 100, offset = 0) {
-    return apiRequest(`/accounts/${accountId}/dialogs?limit=${limit}&offset=${offset}`);
-}
-
-// Получение папок
-export async function getFolders(accountId) {
-    return apiRequest(`/accounts/${accountId}/folders`);
-}
-
-// Получение рекомендуемых папок
-export async function getSuggestedDialogFilters(accountId) {
-    return apiRequest(`/accounts/${accountId}/folders/suggested`);
-}
-
-// Получение всех данных
-export async function getCommonData(accountId) {
-    return apiRequest(`/accounts/${accountId}/data`);
-}
-
-// Выход из Telegram
-export async function logOut(accountId) {
-    return apiRequest(`/accounts/${accountId}/logout`, {
-        method: 'POST'
-    });
-}
-```
-
-### 9.2 Обновить [AccountCard.vue](file://D:/projects/vue/comanaso/src/components/account/AccountCard.vue)
-
-```javascript
-// В функции onClickStart():
-async function onClickStart() {
-    if (!isValidConnectData({
-        apiId: state.apiId,
-        apiHash: state.apiHash,
-        phoneNumber: state.phoneNumber,
-    })) {
-        toastStore.addToast('error', LOC_TOAST_VALID_ERROR);
-        return;
-    }
-
-    accountStore.changeStatus(state.id, 'connect');
-
-    try {
-        // Шаг 1: Начать подключение
-        const connectResult = await connectAccount(state.id);
-        
-        if (connectResult.status === 'code_required') {
-            // Шаг 2: Запросить код у пользователя
-            const code = await showConfirm('Введите код из Telegram');
-            
-            if (!code) {
-                await accountStore.changeStatus(state.id, 'offline');
-                return;
-            }
-
-            // Шаг 3: Отправить код
-            const verifyResult = await verifyCode(
-                state.id, 
-                code, 
-                connectResult.phoneCodeHash
-            );
-
-            if (verifyResult.status === 'connected') {
-                await accountStore.changeStatus(state.id, 'online');
-                toastStore.addToast('ok', LOC_TOAST_SUCCESS_CONNECT);
-            }
-        }
-    } catch (error) {
-        console.error('Connection error:', error);
-        
-        // Если требуется 2FA
-        if (error.message.includes('PASSWORD_REQUIRED')) {
-            const password = await showConfirm('Введите пароль 2FA');
-            
-            if (password) {
-                try {
-                    await verifyPassword(state.id, password);
-                    await accountStore.changeStatus(state.id, 'online');
-                    toastStore.addToast('ok', LOC_TOAST_SUCCESS_CONNECT);
-                } catch (err) {
-                    await accountStore.changeStatus(state.id, 'error', {
-                        title: 'Ошибка 2FA',
-                        desc: err.message
-                    });
-                }
-            }
-        } else {
-            await accountStore.changeStatus(state.id, 'error', {
-                title: 'Ошибка подключения',
-                desc: error.message
-            });
-        }
-    }
-}
-```
-
-### 9.3 Переменные окружения
-
-```env:D:/projects/vue/comanaso/.env
-VITE_API_URL=http://localhost:8000/api
-VITE_WS_URL=ws://localhost:8000/ws
-```
-
----
-
-## 10. BACKEND IMPLEMENTATION HINTS (для Python/FastAPI)
-
-### 10.1 Структура проекта
+### 6.1 Структура проекта
 
 ```
 backend/
@@ -788,7 +672,7 @@ backend/
 │   ├── accounts.ps1
 │   └── auth.ps1
 ├── alembic/
-│   ├── version/
+│   ├── versions/
 │   ├── script.py.mako
 │   └── env.py                      # Alembic environment configuration. Настройка окружения для миграций базы данных.
 ├── app/
@@ -821,137 +705,16 @@ backend/
 └── .env
 ```
 
-### 10.2 Основные зависимости
+### 6.2 Основные зависимости
 
 ```txt:requirements.txt
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
-telethon==1.34.0
+telethon==1.38.1
 sqlalchemy==2.0.25
 pydantic==2.5.3
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
+alembic==1.13.1
 ```
-
-### 10.3 Пример Telethon клиента
-
-```python
-# app/utils/telethon_client.py
-from telethon import TelegramClient
-from telethon.sessions import StringSession
-
-class TelethonManager:
-    def __init__(self):
-        self.clients = {}  # {account_id: TelegramClient}
-    
-    async def create_client(self, account_id, api_id, api_hash, session_string=None):
-        session = StringSession(session_string) if session_string else StringSession()
-        client = TelegramClient(session, api_id, api_hash)
-        await client.connect()
-        self.clients[account_id] = client
-        return client
-    
-    async def send_code(self, account_id, phone):
-        client = self.clients.get(account_id)
-        if not client:
-            raise ValueError("Client not found")
-        
-        result = await client.send_code_request(phone)
-        return result.phone_code_hash
-    
-    async def sign_in(self, account_id, phone, code, phone_code_hash):
-        client = self.clients.get(account_id)
-        await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
-        
-        # Сохранить session string в БД
-        session_string = client.session.save()
-        return session_string
-    
-    async def get_dialogs(self, account_id, limit=100):
-        client = self.clients.get(account_id)
-        dialogs = await client.get_dialogs(limit=limit)
-        
-        return [
-            {
-                "id": str(dialog.id),
-                "name": dialog.name,
-                "type": self._get_dialog_type(dialog.entity),
-                "unreadCount": dialog.unread_count,
-                # ... остальные поля
-            }
-            for dialog in dialogs
-        ]
-```
-
----
-
-## 11. ТЕСТИРОВАНИЕ API
-
-### Postman Collection (пример)
-
-```json
-{
-  "info": {
-    "name": "Comanaso API",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "item": [
-    {
-      "name": "Auth",
-      "item": [
-        {
-          "name": "Register",
-          "request": {
-            "method": "POST",
-            "url": "{{base_url}}/auth/register",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"login\": \"testuser\",\n  \"password\": \"password123\"\n}"
-            }
-          }
-        },
-        {
-          "name": "Login",
-          "request": {
-            "method": "POST",
-            "url": "{{base_url}}/auth/login",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"login\": \"testuser\",\n  \"password\": \"password123\"\n}"
-            }
-          }
-        }
-      ]
-    }
-  ],
-  "variable": [
-    {
-      "key": "base_url",
-      "value": "http://localhost:8000/api"
-    },
-    {
-      "key": "token",
-      "value": ""
-    }
-  ]
-}
-```
-
----
-
-## ИТОГО
-
-Этот контракт покрывает:
-- ✅ Аутентификацию пользователей
-- ✅ CRUD операции с аккаунтами
-- ✅ Подключение к Telegram (с 2FA)
-- ✅ Получение диалогов и папок
-- ✅ Статистику и аналитику
-- ✅ Обработку ошибок
-- ✅ Интеграцию с существующим frontend
-
-**Следующие шаги:**
-1. Реализовать backend на FastAPI + Telethon
-2. Обновить [connection.js](file://D:/projects/vue/comanaso/src/utils/connection.js) согласно контракту
-3. Протестировать интеграцию
