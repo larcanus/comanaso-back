@@ -423,18 +423,3 @@ class TelegramService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={"error": "TELETHON_ERROR", "message": str(e)}
             )
-
-    async def get_common_data(self, db: AsyncSession, user_id: int, account_id: int) -> Any:
-        """
-        Аггрегированные данные (authorized, dialogs_sample).
-        """
-        await self._get_account(db, account_id, user_id)
-        try:
-            return await self.tm.get_common_data(account_id)
-        except NotConnected:
-            return {"authorized": False, "dialogs_sample": 0}
-        except TelethonManagerError as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={"error": "TELETHON_ERROR", "message": str(e)}
-            )

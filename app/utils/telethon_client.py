@@ -340,26 +340,6 @@ class TelethonManager:
                 self._logger.debug("get_folders error: %s", type(e).__name__)
                 raise TelethonManagerError(str(e))
 
-    async def get_common_data(self, account_id: int) -> Dict[str, Any]:
-        """
-        Возвращает агрегированные данные по аккаунту (пример).
-        """
-        lock = self._get_lock(account_id)
-        async with lock:
-            client = self._clients.get(account_id)
-            if not client:
-                raise NotConnected("client not created")
-            try:
-                authorized = await client.is_user_authorized()
-                dialogs = await client.get_dialogs(limit=10) if authorized else []
-                return {
-                    "authorized": authorized,
-                    "dialogs_sample": len(dialogs),
-                }
-            except Exception as e:
-                self._logger.debug("get_common_data error: %s", type(e).__name__)
-                raise TelethonManagerError(str(e))
-
     async def disconnect_all(self) -> None:
         """
         Отключает все активные клиенты и очищает внутренний словарь.

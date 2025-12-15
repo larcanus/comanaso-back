@@ -233,29 +233,3 @@ async def get_folders(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "TELETHON_ERROR", "message": str(e)}
         )
-
-
-@router.get("/accounts/{account_id}/data")
-async def get_common_data(
-        account_id: int,
-        db: AsyncSession = Depends(get_db),
-        current_user: Any = Depends(get_current_user),
-        account: Account = Depends(get_account),
-        tm: TelethonManager = Depends(get_telethon_manager),
-) -> Any:
-    """Получить общие данные Telegram-аккаунта (статус авторизации, количество диалогов)."""
-    service = TelegramService(tm)
-    if account.id != account_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="account mismatch")
-    try:
-        return await service.get_common_data(db, current_user.id, account.id)
-    except InvalidApiCredentials as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "INVALID_API_CREDENTIALS", "message": str(e)}
-        )
-    except TelethonManagerError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "TELETHON_ERROR", "message": str(e)}
-        )

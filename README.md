@@ -563,42 +563,6 @@ Response 200:
 
 ---
 
-## 6. COMMON DATA (Общие данные)
-
-### 6.1 Получить все данные аккаунта
-
-```http
-GET /api/accounts/{accountId}/data
-Authorization: Bearer {token}
-
-Response 200:
-{
-  "account": {
-    "id": 1,
-    "name": "Рабочий аккаунт",
-    "status": "online",
-    "entity": { /* ... */ }
-  },
-  "dialogs": {
-    "total": 245,
-    "items": [ /* массив диалогов */ ]
-  },
-  "folders": [ /* массив папок */ ],
-  "stats": {
-    "total": 245,
-    "byType": { /* ... */ }
-  }
-}
-
-Response 403:
-{
-  "error": "ACCOUNT_NOT_CONNECTED",
-  "message": "Аккаунт не подключен к Telegram"
-}
-```
-
----
-
 ## 7. ERROR CODES
 
 ### Общие ошибки
