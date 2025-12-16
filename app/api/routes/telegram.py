@@ -194,7 +194,7 @@ async def logout_account(
 # ============================================================================
 
 @router.get(
-    "/{account_id}/me",
+    "/accounts/{account_id}/me",
     response_model=AccountMeResponse,
     summary="Получить информацию об аккаунте",
     description="Возвращает информацию о текущем пользователе Telegram аккаунта"
@@ -220,7 +220,7 @@ async def get_account_me(
 
 
 @router.get(
-    "/{account_id}/dialogs",
+    "/accounts/{account_id}/dialogs",
     response_model=DialogsResponse,
     summary="Получить список диалогов",
     description="Возвращает расширенный список диалогов с полной информацией"
@@ -262,7 +262,7 @@ async def get_account_dialogs(
 
 
 @router.get(
-    "/{account_id}/folders",
+    "/accounts/{account_id}/folders",
     response_model=List[FolderSchema],
     summary="Получить список папок",
     description="Возвращает список папок (фильтров) диалогов"
