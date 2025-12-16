@@ -164,11 +164,15 @@ class TelegramService:
             session_string = await self.tm.sign_in_code(account.id, account.phone, code)
             if session_string:
                 await AccountService.update_session(db, account.id, session_string)
-            # пометить online
+
+            account.is_connected = True
             try:
                 await self._set_status_field(db, account, "online")
             except Exception:
                 logger.debug("Failed to set online status", exc_info=True)
+            db.add(account)
+            await db.commit()
+            await db.refresh(account)
             return {"status": "connected", "message": "Аккаунт успешно подключен"}
         except PasswordRequired:
             # требуется пароль 2FA - получаем подсказку
@@ -264,10 +268,15 @@ class TelegramService:
             session_string = await self.tm.sign_in_password(account.id, password)
             if session_string:
                 await AccountService.update_session(db, account.id, session_string)
+            # пометить online и подключенным
+            account.is_connected = True
             try:
                 await self._set_status_field(db, account, "online")
             except Exception:
                 logger.debug("Failed to set online status", exc_info=True)
+            db.add(account)
+            await db.commit()
+            await db.refresh(account)
             return {"status": "online", "message": "Аккаунт успешно подключен"}
         except InvalidPasswordError:
             raise HTTPException(

@@ -82,15 +82,27 @@ class ExpiredCodeError(TelethonManagerError):
 
 
 class TelethonManager:
-    """Менеджер для управления Telethon клиентами"""
+    """Менеджер для управления Telethon клиентами (Singleton)"""
+
+    _instance: Optional['TelethonManager'] = None
+    _lock: asyncio.Lock = asyncio.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
 
     def __init__(self):
+        if self._initialized:
+            return
         self._clients: Dict[int, TelegramClient] = {}
         self._locks: Dict[int, asyncio.Lock] = {}
         self._phone_code_hashes: Dict[int, str] = {}
         self._password_hints: Dict[int, Optional[str]] = {}
         self._logger = logger
-        logger.info("TelethonManager инициализирован")
+        self._initialized = True
+        logger.info("TelethonManager инициализирован (Singleton)")
 
     def _get_lock(self, account_id: int) -> asyncio.Lock:
         if account_id not in self._locks:
@@ -427,78 +439,88 @@ class TelethonManager:
                 for dialog in dialogs:
                     entity = dialog.entity
 
+                    # Проверяем notify_settings для muted
+                    notify_settings = getattr(dialog, "notify_settings", None)
+                    is_muted = bool(getattr(notify_settings, "mute_until", None)) if notify_settings else False
+
                     # Базовая информация о диалоге
                     dialog_data = {
-                        "id": str(dialog.id),
-                        "name": dialog.name or dialog.title,
-                        "date": dialog.date.isoformat() if dialog.date else None,
-                        "unreadCount": dialog.unread_count,
-                        "unreadMentionsCount": dialog.unread_mentions_count,
+                        "id": str(getattr(dialog, "id", 0)),
+                        "name": getattr(dialog, "name", None) or getattr(dialog, "title", ""),
+                        "date": dialog.date.isoformat() if getattr(dialog, "date", None) else None,
+                        "unreadCount": getattr(dialog, "unread_count", 0),
+                        "unreadMentionsCount": getattr(dialog, "unread_mentions_count", 0),
                         "unreadReactionsCount": getattr(dialog, "unread_reactions_count", 0),
-                        "isArchived": dialog.archived,
-                        "isPinned": dialog.pinned,
-                        "isMuted": dialog.muted,
-                        "folderId": dialog.folder_id,
+                        "isArchived": getattr(dialog, "archived", False),
+                        "isPinned": getattr(dialog, "pinned", False),
+                        "isMuted": is_muted,
+                        "folderId": getattr(dialog, "folder_id", None),
                     }
 
                     # Последнее сообщение
-                    if dialog.message:
-                        msg = dialog.message
+                    msg = getattr(dialog, "message", None)
+                    if msg:
+                        from_id = getattr(msg, "from_id", None)
+                        from_user_id = getattr(from_id, "user_id", None) if from_id else None
+
                         dialog_data["lastMessage"] = {
-                            "id": msg.id,
-                            "text": msg.message or "",
-                            "date": msg.date.isoformat() if msg.date else None,
-                            "fromId": msg.from_id.user_id if hasattr(msg.from_id, "user_id") else None,
-                            "out": msg.out,
-                            "mentioned": msg.mentioned,
-                            "mediaUnread": msg.media_unread,
-                            "silent": msg.silent
+                            "id": getattr(msg, "id", 0),
+                            "text": getattr(msg, "message", "") or "",
+                            "date": msg.date.isoformat() if getattr(msg, "date", None) else None,
+                            "fromId": from_user_id,
+                            "out": getattr(msg, "out", False),
+                            "mentioned": getattr(msg, "mentioned", False),
+                            "mediaUnread": getattr(msg, "media_unread", False),
+                            "silent": getattr(msg, "silent", False)
                         }
                     else:
                         dialog_data["lastMessage"] = None
 
-                    # Определяем тип и парсим entity
+                    # Определяем тип и парсим entity с безопасными getattr
                     if isinstance(entity, User):
-                        dialog_data["type"] = "bot" if entity.bot else "user"
+                        dialog_data["type"] = "bot" if getattr(entity, "bot", False) else "user"
                         dialog_data["entity"] = {
-                            "firstName": entity.first_name or "",
-                            "lastName": entity.last_name or "",
-                            "username": entity.username,
-                            "phone": entity.phone,
-                            "isBot": entity.bot,
-                            "isVerified": entity.verified,
+                            "firstName": getattr(entity, "first_name", "") or "",
+                            "lastName": getattr(entity, "last_name", "") or "",
+                            "username": getattr(entity, "username", None),
+                            "phone": getattr(entity, "phone", None),
+                            "isBot": getattr(entity, "bot", False),
+                            "isVerified": getattr(entity, "verified", False),
                             "isPremium": getattr(entity, "premium", False),
-                            "isContact": entity.contact,
-                            "isMutualContact": entity.mutual_contact,
-                            "photo": self._parse_photo(entity.photo),
-                            "status": self._parse_user_status(entity.status)
+                            "isContact": getattr(entity, "contact", False),
+                            "isMutualContact": getattr(entity, "mutual_contact", False),
+                            "photo": self._parse_photo(getattr(entity, "photo", None)),
+                            "status": self._parse_user_status(getattr(entity, "status", None))
                         }
                     elif isinstance(entity, Chat):
                         dialog_data["type"] = "group"
+                        entity_date = getattr(entity, "date", None)
                         dialog_data["entity"] = {
-                            "title": entity.title,
+                            "title": getattr(entity, "title", ""),
                             "participantsCount": getattr(entity, "participants_count", 0),
-                            "createdDate": entity.date.isoformat() if entity.date else None,
-                            "isCreator": entity.creator,
+                            "createdDate": entity_date.isoformat() if entity_date else None,
+                            "isCreator": getattr(entity, "creator", False),
                             "isAdmin": getattr(entity, "admin_rights", None) is not None,
-                            "photo": self._parse_photo(entity.photo)
+                            "photo": self._parse_photo(getattr(entity, "photo", None))
                         }
                     elif isinstance(entity, Channel):
-                        dialog_data["type"] = "channel" if entity.broadcast else "megagroup"
+                        is_broadcast = getattr(entity, "broadcast", False)
+                        dialog_data["type"] = "channel" if is_broadcast else "megagroup"
+                        entity_date = getattr(entity, "date", None)
                         dialog_data["entity"] = {
-                            "title": entity.title,
-                            "username": entity.username,
+                            "title": getattr(entity, "title", ""),
+                            "username": getattr(entity, "username", None),
                             "participantsCount": getattr(entity, "participants_count", 0),
-                            "createdDate": entity.date.isoformat() if entity.date else None,
-                            "isCreator": entity.creator,
+                            "createdDate": entity_date.isoformat() if entity_date else None,
+                            "isCreator": getattr(entity, "creator", False),
                             "isAdmin": getattr(entity, "admin_rights", None) is not None,
-                            "isBroadcast": entity.broadcast,
-                            "isVerified": entity.verified,
-                            "isScam": entity.scam,
-                            "isFake": entity.fake,
-                            "hasGeo": entity.has_geo,
+                            "isBroadcast": is_broadcast,
+                            "isVerified": getattr(entity, "verified", False),
+                            "isScam": getattr(entity, "scam", False),
+                            "isFake": getattr(entity, "fake", False),
+                            "hasGeo": getattr(entity, "has_geo", False),
                             "slowmodeEnabled": getattr(entity, "slowmode_enabled", False),
-                            "photo": self._parse_photo(entity.photo)
+                            "photo": self._parse_photo(getattr(entity, "photo", None))
                         }
 
                     result_dialogs.append(dialog_data)
