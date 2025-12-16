@@ -581,28 +581,29 @@ class TelethonManager:
                     "excludeArchived": False
                 })
 
-                # Парсим пользовательские папки
-                for dialog_filter in result:
+                # Парсим пользовательские папки из result.filters
+                filters_list = getattr(result, "filters", [])
+                for dialog_filter in filters_list:
                     if isinstance(dialog_filter, DialogFilter):
                         folder_data = {
-                            "id": dialog_filter.id,
-                            "title": dialog_filter.title,
+                            "id": getattr(dialog_filter, "id", 0),
+                            "title": getattr(dialog_filter, "title", ""),
                             "isDefault": False,
                             "emoji": getattr(dialog_filter, "emoticon", None),
-                            "pinnedDialogIds": [str(p.user_id if hasattr(p, "user_id") else p.channel_id)
-                                              for p in dialog_filter.pinned_peers],
-                            "includedChatIds": [str(p.user_id if hasattr(p, "user_id") else p.channel_id)
-                                              for p in dialog_filter.include_peers],
-                            "excludedChatIds": [str(p.user_id if hasattr(p, "user_id") else p.channel_id)
-                                              for p in dialog_filter.exclude_peers],
-                            "contacts": dialog_filter.contacts,
-                            "nonContacts": dialog_filter.non_contacts,
-                            "groups": dialog_filter.groups,
-                            "broadcasts": dialog_filter.broadcasts,
-                            "bots": dialog_filter.bots,
-                            "excludeMuted": dialog_filter.exclude_muted,
-                            "excludeRead": dialog_filter.exclude_read,
-                            "excludeArchived": dialog_filter.exclude_archived
+                            "pinnedDialogIds": [str(getattr(p, "user_id", None) or getattr(p, "channel_id", 0))
+                                              for p in getattr(dialog_filter, "pinned_peers", [])],
+                            "includedChatIds": [str(getattr(p, "user_id", None) or getattr(p, "channel_id", 0))
+                                              for p in getattr(dialog_filter, "include_peers", [])],
+                            "excludedChatIds": [str(getattr(p, "user_id", None) or getattr(p, "channel_id", 0))
+                                              for p in getattr(dialog_filter, "exclude_peers", [])],
+                            "contacts": getattr(dialog_filter, "contacts", False),
+                            "nonContacts": getattr(dialog_filter, "non_contacts", False),
+                            "groups": getattr(dialog_filter, "groups", False),
+                            "broadcasts": getattr(dialog_filter, "broadcasts", False),
+                            "bots": getattr(dialog_filter, "bots", False),
+                            "excludeMuted": getattr(dialog_filter, "exclude_muted", False),
+                            "excludeRead": getattr(dialog_filter, "exclude_read", False),
+                            "excludeArchived": getattr(dialog_filter, "exclude_archived", False)
                         }
                         folders.append(folder_data)
 
