@@ -27,20 +27,97 @@ class StatusSchema(BaseModel):
 # ACCOUNT ME SCHEMAS
 # ============================================================================
 
+class RestrictionReasonSchema(BaseModel):
+    """Схема причины ограничения"""
+    platform: str = Field(..., description="Платформа (android, ios, all)")
+    reason: str = Field(..., description="Код причины")
+    text: str = Field(..., description="Текст причины")
+
+
+class EmojiStatusSchema(BaseModel):
+    """Схема emoji статуса"""
+    documentId: int = Field(..., description="ID документа эмодзи")
+    until: Optional[int] = Field(None, description="Timestamp окончания действия")
+
+
+class UsernameSchema(BaseModel):
+    """Схема username"""
+    username: str = Field(..., description="Username")
+    active: bool = Field(..., description="Активен ли username")
+    editable: bool = Field(..., description="Можно ли редактировать")
+
+
+class PeerColorSchema(BaseModel):
+    """Схема цвета профиля"""
+    color: Optional[int] = Field(None, description="Цвет (номер)")
+    backgroundEmojiId: Optional[int] = Field(None, description="ID фонового эмодзи")
+
+
 class AccountMeResponse(BaseModel):
-    """Схема ответа с информацией об аккаунте"""
+    """Схема ответа с информацией об аккаунте (полная)"""
+    # Базовая информация
     id: int = Field(..., description="ID пользователя в Telegram")
     firstName: str = Field(..., description="Имя")
     lastName: str = Field("", description="Фамилия")
-    username: Optional[str] = Field(None, description="Username")
+    username: Optional[str] = Field(None, description="Основной username")
     phone: Optional[str] = Field(None, description="Номер телефона")
     bio: Optional[str] = Field(None, description="Описание профиля")
-    isBot: bool = Field(False, description="Является ли ботом")
-    isVerified: bool = Field(False, description="Верифицирован ли аккаунт")
-    isPremium: bool = Field(False, description="Есть ли Premium подписка")
     langCode: Optional[str] = Field(None, description="Код языка")
+
+    # Счетчики
+    accessHash: Optional[int] = Field(None, description="Access hash для API")
+
+    # Флаги статуса
+    isSelf: bool = Field(True, description="Это текущий пользователь")
+    isContact: bool = Field(False, description="В контактах")
+    isMutualContact: bool = Field(False, description="Взаимный контакт")
+    isDeleted: bool = Field(False, description="Удаленный аккаунт")
+    isBot: bool = Field(False, description="Является ли ботом")
+    isBotChatHistory: bool = Field(False, description="Бот может читать историю чата")
+    isBotNochats: bool = Field(False, description="Бот не может быть добавлен в группы")
+    isVerified: bool = Field(False, description="Верифицирован ли аккаунт")
+    isRestricted: bool = Field(False, description="Ограничен ли аккаунт")
+    isMin: bool = Field(False, description="Минимальная информация")
+    isBotInlineGeo: bool = Field(False, description="Бот поддерживает inline geo")
+    isSupport: bool = Field(False, description="Официальная поддержка")
+    isScam: bool = Field(False, description="Помечен как скам")
+    isFake: bool = Field(False, description="Помечен как фейк")
+    isPremium: bool = Field(False, description="Есть ли Premium подписка")
+    isBotAttachMenu: bool = Field(False, description="Бот в меню прикрепления")
+    isBotAttachMenuEnabled: bool = Field(False, description="Меню прикрепления включено")
+    isBotCanEdit: bool = Field(False, description="Можно редактировать бота")
+    isCloseFriend: bool = Field(False, description="Близкий друг")
+    isStoriesHidden: bool = Field(False, description="Stories скрыты")
+    isStoriesUnavailable: bool = Field(False, description="Stories недоступны")
+    isContactRequirePremium: bool = Field(False, description="Для контакта нужен Premium")
+    isBotBusiness: bool = Field(False, description="Бизнес бот")
+    isBotHasMainApp: bool = Field(False, description="У бота есть главное приложение")
+    isApplyMinPhoto: bool = Field(False, description="Применить минимальное фото")
+
+    # Медиа
     photo: Optional[PhotoSchema] = Field(None, description="Фото профиля")
     status: StatusSchema = Field(..., description="Статус пользователя")
+
+    # Боты
+    botInfoVersion: Optional[int] = Field(None, description="Версия информации о боте")
+    botInlinePlaceholder: Optional[str] = Field(None, description="Placeholder для inline бота")
+    botActiveUsers: Optional[int] = Field(None, description="Количество активных пользователей бота")
+
+    # Ограничения
+    restrictionReason: Optional[List[RestrictionReasonSchema]] = Field(None, description="Причины ограничения")
+
+    # Emoji статус
+    emojiStatus: Optional[EmojiStatusSchema] = Field(None, description="Emoji статус")
+
+    # Множественные usernames
+    usernames: Optional[List[UsernameSchema]] = Field(None, description="Список usernames")
+
+    # Stories
+    storiesMaxId: Optional[int] = Field(None, description="Максимальный ID story")
+
+    # Цвета профиля
+    color: Optional[PeerColorSchema] = Field(None, description="Цвет аккаунта")
+    profileColor: Optional[PeerColorSchema] = Field(None, description="Цвет профиля")
 
 
 # ============================================================================

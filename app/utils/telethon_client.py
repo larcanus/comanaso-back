@@ -354,6 +354,54 @@ class TelethonManager:
             }
         return None
 
+    def _parse_restriction_reasons(self, reasons) -> Optional[List[Dict[str, str]]]:
+        """Парсит причины ограничений"""
+        if not reasons:
+            return None
+
+        result = []
+        for reason in reasons:
+            result.append({
+                "platform": getattr(reason, "platform", ""),
+                "reason": getattr(reason, "reason", ""),
+                "text": getattr(reason, "text", "")
+            })
+        return result if result else None
+
+    def _parse_emoji_status(self, emoji_status) -> Optional[Dict[str, Any]]:
+        """Парсит emoji статус"""
+        if not emoji_status:
+            return None
+
+        return {
+            "documentId": str(getattr(emoji_status, "document_id", "")),
+            "until": getattr(emoji_status, "until", None)
+        }
+
+    def _parse_usernames(self, usernames) -> Optional[List[Dict[str, Any]]]:
+        """Парсит множественные юзернеймы"""
+        if not usernames:
+            return None
+
+        result = []
+        for username_obj in usernames:
+            result.append({
+                "username": getattr(username_obj, "username", ""),
+                "isEditable": getattr(username_obj, "editable", False),
+                "isActive": getattr(username_obj, "active", False)
+            })
+        return result if result else None
+
+    def _parse_peer_color(self, color) -> Optional[Dict[str, Any]]:
+        """Парсит цвет профиля"""
+        if not color:
+            return None
+
+        return {
+            "color": getattr(color, "color", None),
+            "backgroundEmojiId": str(getattr(color, "background_emoji_id", "")) if getattr(color, "background_emoji_id", None) else None
+        }
+
     def _parse_entity_type(self, entity) -> str:
         """Определяет тип entity"""
         if isinstance(entity, User):
@@ -372,10 +420,10 @@ class TelethonManager:
 
     async def get_me(self, account_id: int) -> Dict[str, Any]:
         """
-        Получить информацию о текущем пользователе
+        Получить полную информацию о текущем пользователе
 
         Returns:
-            Словарь с информацией о пользователе
+            Словарь со всеми доступными полями пользователя
         """
         lock = self._get_lock(account_id)
         async with lock:
@@ -387,26 +435,83 @@ class TelethonManager:
                 if not await client.is_user_authorized():
                     raise NotConnected("client not authorized")
 
+                # Получаем базовую информацию
                 me = await client.get_me()
 
-                return {
+                # Получаем полную информацию пользователя (включая lang_code)
+                full_user = await client.get_entity("me")
+
+                # Базовые поля
+                result = {
                     "id": me.id,
+                    "accessHash": getattr(me, "access_hash", None),
+
+                    # Имена и идентификаторы
                     "firstName": me.first_name or "",
                     "lastName": me.last_name or "",
                     "username": me.username,
                     "phone": me.phone,
-                    "bio": getattr(me, "about", None),
+                    "langCode": getattr(full_user, "lang_code", None) or getattr(me, "lang_code", None),
+
+                    # Флаги статуса
+                    "isSelf": getattr(me, "is_self", True),
+                    "isContact": getattr(me, "contact", False),
+                    "isMutualContact": getattr(me, "mutual_contact", False),
+                    "isDeleted": getattr(me, "deleted", False),
                     "isBot": me.bot,
+                    "isBotChatHistory": getattr(me, "bot_chat_history", False),
+                    "isBotNochats": getattr(me, "bot_nochats", False),
                     "isVerified": me.verified,
+                    "isRestricted": getattr(me, "restricted", False),
+                    "isMin": getattr(me, "min", False),
+                    "isBotInlineGeo": getattr(me, "bot_inline_geo", False),
+                    "isSupport": getattr(me, "support", False),
+                    "isScam": getattr(me, "scam", False),
+                    "isFake": getattr(me, "fake", False),
                     "isPremium": getattr(me, "premium", False),
-                    "langCode": me.lang_code,
+                    "isBotAttachMenu": getattr(me, "bot_attach_menu", False),
+                    "isAttachMenuEnabled": getattr(me, "attach_menu_enabled", False),
+                    "isBotCanEdit": getattr(me, "bot_can_edit", False),
+                    "isCloseFriend": getattr(me, "close_friend", False),
+                    "isStoriesHidden": getattr(me, "stories_hidden", False),
+                    "isStoriesUnavailable": getattr(me, "stories_unavailable", False),
+                    "isContactRequirePremium": getattr(me, "contact_require_premium", False),
+                    "isBotBusiness": getattr(me, "bot_business", False),
+                    "isBotHasMainApp": getattr(me, "bot_has_main_app", False),
+                    "isApplyMinPhoto": getattr(me, "apply_min_photo", False),
+
+                    # Медиа
                     "photo": self._parse_photo(me.photo),
-                    "status": self._parse_user_status(me.status)
+                    "status": self._parse_user_status(me.status),
+
+                    # Боты
+                    "botInfoVersion": getattr(me, "bot_info_version", None),
+                    "botInlinePlaceholder": getattr(me, "bot_inline_placeholder", None),
+                    "botActiveUsers": getattr(me, "bot_active_users", None),
+
+                    # Ограничения
+                    "restrictionReason": self._parse_restriction_reasons(getattr(me, "restriction_reason", None)),
+
+                    # Emoji статус
+                    "emojiStatus": self._parse_emoji_status(getattr(me, "emoji_status", None)),
+
+                    # Множественные юзернеймы
+                    "usernames": self._parse_usernames(getattr(me, "usernames", None)),
+
+                    # Stories
+                    "storiesMaxId": getattr(me, "stories_max_id", None),
+
+                    # Цвета профиля
+                    "color": self._parse_peer_color(getattr(me, "color", None)),
+                    "profileColor": self._parse_peer_color(getattr(me, "profile_color", None)),
                 }
+
+                return result
+
             except errors.FloodWaitError as e:
                 raise FloodWait(int(getattr(e, "seconds", 0)))
             except Exception as e:
-                self._logger.debug("get_me error: %s", type(e).__name__)
+                self._logger.error(f"get_me error: {type(e).__name__}: {e}")
                 raise TelethonManagerError(str(e))
 
     async def get_dialogs_extended(
