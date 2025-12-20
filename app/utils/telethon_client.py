@@ -18,7 +18,7 @@ from telethon.tl.types import (
     UserStatusOnline, UserStatusOffline, UserStatusRecently,
     UserStatusLastWeek, UserStatusLastMonth, UserStatusEmpty,
     UserProfilePhoto, ChatPhoto, MessageMediaPhoto,
-    Dialog, DialogFilter, InputPeerEmpty
+    Dialog, DialogFilter, InputPeerEmpty, PeerUser, PeerChat, PeerChannel
 )
 from telethon.tl.functions.messages import GetDialogFiltersRequest
 
@@ -137,7 +137,6 @@ class TelethonManager:
             except errors.FloodWaitError as e:
                 raise FloodWait(int(getattr(e, "seconds", 0)))
             except Exception as e:
-                # Общая ошибка от Telethon -> оборачиваем
                 self._logger.debug("create_client error: %s", type(e).__name__)
                 raise TelethonManagerError(str(e))
 
@@ -204,7 +203,6 @@ class TelethonManager:
             raise InvalidCode("Invalid phone code")
         except PhoneCodeExpiredError:
             logger.warning(f"Код истек для аккаунта {account_id}")
-            # Очищаем истекший phone_code_hash
             self._phone_code_hashes.pop(account_id, None)
             raise ExpiredCodeError("Код истек, запросите новый")
         except Exception as e:
@@ -269,7 +267,6 @@ class TelethonManager:
             raise FloodWait(int(getattr(e, "seconds", 0)))
         except Exception as e:
             error_msg = str(e)
-            # "The key is not registered" означает что клиент не в правильном состоянии
             if "key is not registered" in error_msg.lower():
                 logger.warning(f"Неверное состояние для 2FA аккаунта {account_id}: {error_msg}")
                 raise NotConnected("Требуется сначала ввести код подтверждения")
@@ -309,7 +306,6 @@ class TelethonManager:
                 self._logger.debug("logout error: %s", type(e).__name__)
                 raise TelethonManagerError(str(e))
             finally:
-                # Очищаем phone_code_hash если был
                 self._phone_code_hashes.pop(account_id, None)
 
     def _parse_user_status(self, status) -> Dict[str, Any]:
@@ -356,6 +352,22 @@ class TelethonManager:
                 "dcId": photo.dc_id,
                 "hasVideo": getattr(photo, "has_video", False)
             }
+        return None
+
+    def _parse_entity_type(self, entity) -> str:
+        """Определяет тип entity"""
+        if isinstance(entity, User):
+            return "user"
+        elif isinstance(entity, Chat):
+            return "group"
+        elif isinstance(entity, Channel):
+            return "channel" if entity.broadcast else "supergroup"
+        return "unknown"
+
+    def _get_entity_id(self, entity) -> Optional[int]:
+        """Безопасно получает ID entity"""
+        if isinstance(entity, (User, Chat, Channel)):
+            return entity.id
         return None
 
     async def get_me(self, account_id: int) -> Dict[str, Any]:
@@ -426,12 +438,10 @@ class TelethonManager:
                 if not await client.is_user_authorized():
                     raise NotConnected("client not authorized")
 
-                # Получаем диалоги с учетом offset
+                # В Telethon 1.42.0 убрали параметр offset_peer
+                # Используем только offset_date и offset_id
                 dialogs = await client.get_dialogs(
                     limit=limit,
-                    offset_date=None,
-                    offset_id=0,
-                    offset_peer=InputPeerEmpty(),
                     archived=archived
                 )
 
@@ -443,9 +453,13 @@ class TelethonManager:
                     notify_settings = getattr(dialog, "notify_settings", None)
                     is_muted = bool(getattr(notify_settings, "mute_until", None)) if notify_settings else False
 
+                    # Получаем ID entity безопасно
+                    entity_id = self._get_entity_id(entity)
+                    entity_type = self._parse_entity_type(entity)
+
                     # Базовая информация о диалоге
                     dialog_data = {
-                        "id": str(getattr(dialog, "id", 0)),
+                        "id": str(entity_id) if entity_id else "0",
                         "name": getattr(dialog, "name", None) or getattr(dialog, "title", ""),
                         "date": dialog.date.isoformat() if getattr(dialog, "date", None) else None,
                         "unreadCount": getattr(dialog, "unread_count", 0),
@@ -455,72 +469,56 @@ class TelethonManager:
                         "isPinned": getattr(dialog, "pinned", False),
                         "isMuted": is_muted,
                         "folderId": getattr(dialog, "folder_id", None),
+                        "type": entity_type,
                     }
 
-                    # Последнее сообщение
-                    msg = getattr(dialog, "message", None)
-                    if msg:
-                        from_id = getattr(msg, "from_id", None)
-                        from_user_id = getattr(from_id, "user_id", None) if from_id else None
-
-                        dialog_data["lastMessage"] = {
-                            "id": getattr(msg, "id", 0),
-                            "text": getattr(msg, "message", "") or "",
-                            "date": msg.date.isoformat() if getattr(msg, "date", None) else None,
-                            "fromId": from_user_id,
-                            "out": getattr(msg, "out", False),
-                            "mentioned": getattr(msg, "mentioned", False),
-                            "mediaUnread": getattr(msg, "media_unread", False),
-                            "silent": getattr(msg, "silent", False)
-                        }
-                    else:
-                        dialog_data["lastMessage"] = None
-
-                    # Определяем тип и парсим entity с безопасными getattr
+                    # Информация о entity
                     if isinstance(entity, User):
-                        dialog_data["type"] = "bot" if getattr(entity, "bot", False) else "user"
                         dialog_data["entity"] = {
-                            "firstName": getattr(entity, "first_name", "") or "",
-                            "lastName": getattr(entity, "last_name", "") or "",
-                            "username": getattr(entity, "username", None),
-                            "phone": getattr(entity, "phone", None),
-                            "isBot": getattr(entity, "bot", False),
-                            "isVerified": getattr(entity, "verified", False),
+                            "id": entity.id,
+                            "firstName": entity.first_name or "",
+                            "lastName": entity.last_name or "",
+                            "username": entity.username,
+                            "phone": entity.phone,
+                            "isBot": entity.bot,
+                            "isVerified": entity.verified,
                             "isPremium": getattr(entity, "premium", False),
-                            "isContact": getattr(entity, "contact", False),
-                            "isMutualContact": getattr(entity, "mutual_contact", False),
-                            "photo": self._parse_photo(getattr(entity, "photo", None)),
-                            "status": self._parse_user_status(getattr(entity, "status", None))
+                            "photo": self._parse_photo(entity.photo),
+                            "status": self._parse_user_status(entity.status)
                         }
-                    elif isinstance(entity, Chat):
-                        dialog_data["type"] = "group"
-                        entity_date = getattr(entity, "date", None)
+                    elif isinstance(entity, (Chat, Channel)):
                         dialog_data["entity"] = {
-                            "title": getattr(entity, "title", ""),
-                            "participantsCount": getattr(entity, "participants_count", 0),
-                            "createdDate": entity_date.isoformat() if entity_date else None,
-                            "isCreator": getattr(entity, "creator", False),
-                            "isAdmin": getattr(entity, "admin_rights", None) is not None,
-                            "photo": self._parse_photo(getattr(entity, "photo", None))
-                        }
-                    elif isinstance(entity, Channel):
-                        is_broadcast = getattr(entity, "broadcast", False)
-                        dialog_data["type"] = "channel" if is_broadcast else "megagroup"
-                        entity_date = getattr(entity, "date", None)
-                        dialog_data["entity"] = {
-                            "title": getattr(entity, "title", ""),
+                            "id": entity.id,
+                            "title": entity.title,
                             "username": getattr(entity, "username", None),
-                            "participantsCount": getattr(entity, "participants_count", 0),
-                            "createdDate": entity_date.isoformat() if entity_date else None,
-                            "isCreator": getattr(entity, "creator", False),
-                            "isAdmin": getattr(entity, "admin_rights", None) is not None,
-                            "isBroadcast": is_broadcast,
+                            "participantsCount": getattr(entity, "participants_count", None),
                             "isVerified": getattr(entity, "verified", False),
                             "isScam": getattr(entity, "scam", False),
                             "isFake": getattr(entity, "fake", False),
-                            "hasGeo": getattr(entity, "has_geo", False),
-                            "slowmodeEnabled": getattr(entity, "slowmode_enabled", False),
                             "photo": self._parse_photo(getattr(entity, "photo", None))
+                        }
+
+                    # Последнее сообщение - ИСПРАВЛЕНО
+                    msg = getattr(dialog, "message", None)
+                    if msg:
+                        from_id = getattr(msg, "from_id", None)
+                        from_user_id = None
+
+                        if from_id:
+                            if isinstance(from_id, PeerUser):
+                                from_user_id = from_id.user_id
+                            elif isinstance(from_id, PeerChannel):
+                                from_user_id = from_id.channel_id
+                            elif isinstance(from_id, PeerChat):
+                                from_user_id = from_id.chat_id
+
+                        dialog_data["message"] = {
+                            "id": msg.id,
+                            "date": msg.date.isoformat() if msg.date else None,
+                            "text": getattr(msg, "message", ""),
+                            "out": msg.out,
+                            "fromId": from_user_id,
+                            "mediaType": type(msg.media).__name__ if msg.media else None,
                         }
 
                     result_dialogs.append(dialog_data)
@@ -529,7 +527,7 @@ class TelethonManager:
                 has_more = len(dialogs) == limit
 
                 return {
-                    "total": len(result_dialogs),  # В реальности нужен общий count
+                    "total": len(result_dialogs),
                     "hasMore": has_more,
                     "dialogs": result_dialogs
                 }
@@ -537,7 +535,7 @@ class TelethonManager:
             except errors.FloodWaitError as e:
                 raise FloodWait(int(getattr(e, "seconds", 0)))
             except Exception as e:
-                self._logger.debug("get_dialogs_extended error: %s", type(e).__name__)
+                self._logger.error(f"get_dialogs_extended error: {type(e).__name__}: {e}")
                 raise TelethonManagerError(str(e))
 
     async def get_folders(self, account_id: int) -> List[Dict[str, Any]]:
@@ -558,7 +556,7 @@ class TelethonManager:
                     raise NotConnected("client not authorized")
 
                 # Получаем фильтры диалогов
-                result = await client(GetDialogFiltersRequest())
+                filters_result = await client(GetDialogFiltersRequest())
 
                 folders = []
 
@@ -581,38 +579,59 @@ class TelethonManager:
                     "excludeArchived": False
                 })
 
-                # Парсим пользовательские папки из result.filters
-                filters_list = getattr(result, "filters", [])
-                for dialog_filter in filters_list:
-                    if isinstance(dialog_filter, DialogFilter):
-                        folder_data = {
-                            "id": getattr(dialog_filter, "id", 0),
-                            "title": getattr(dialog_filter, "title", ""),
-                            "isDefault": False,
-                            "emoji": getattr(dialog_filter, "emoticon", None),
-                            "pinnedDialogIds": [str(getattr(p, "user_id", None) or getattr(p, "channel_id", 0))
-                                              for p in getattr(dialog_filter, "pinned_peers", [])],
-                            "includedChatIds": [str(getattr(p, "user_id", None) or getattr(p, "channel_id", 0))
-                                              for p in getattr(dialog_filter, "include_peers", [])],
-                            "excludedChatIds": [str(getattr(p, "user_id", None) or getattr(p, "channel_id", 0))
-                                              for p in getattr(dialog_filter, "exclude_peers", [])],
-                            "contacts": getattr(dialog_filter, "contacts", False),
-                            "nonContacts": getattr(dialog_filter, "non_contacts", False),
-                            "groups": getattr(dialog_filter, "groups", False),
-                            "broadcasts": getattr(dialog_filter, "broadcasts", False),
-                            "bots": getattr(dialog_filter, "bots", False),
-                            "excludeMuted": getattr(dialog_filter, "exclude_muted", False),
-                            "excludeRead": getattr(dialog_filter, "exclude_read", False),
-                            "excludeArchived": getattr(dialog_filter, "exclude_archived", False)
-                        }
-                        folders.append(folder_data)
+                # Парсим фильтры из Telegram
+                if hasattr(filters_result, 'filters'):
+                    for filter_obj in filters_result.filters:
+                        if isinstance(filter_obj, DialogFilter):
+                            # Извлекаем title - ИСПРАВЛЕНО для Telethon 1.42.0
+                            title = filter_obj.title
+                            if hasattr(title, 'text'):
+                                # title это TextWithEntities объект
+                                title = title.text
+                            elif not isinstance(title, str):
+                                # На всякий случай конвертируем в строку
+                                title = str(title)
+
+                            # Собираем ID чатов
+                            pinned_ids = [str(peer.user_id if hasattr(peer, 'user_id')
+                                             else peer.channel_id if hasattr(peer, 'channel_id')
+                                             else peer.chat_id)
+                                         for peer in getattr(filter_obj, 'pinned_peers', [])]
+
+                            included_ids = [str(peer.user_id if hasattr(peer, 'user_id')
+                                              else peer.channel_id if hasattr(peer, 'channel_id')
+                                              else peer.chat_id)
+                                          for peer in getattr(filter_obj, 'include_peers', [])]
+
+                            excluded_ids = [str(peer.user_id if hasattr(peer, 'user_id')
+                                              else peer.channel_id if hasattr(peer, 'channel_id')
+                                              else peer.chat_id)
+                                          for peer in getattr(filter_obj, 'exclude_peers', [])]
+
+                            folders.append({
+                                "id": filter_obj.id,
+                                "title": title,  # Используем извлеченную строку
+                                "isDefault": False,
+                                "emoji": getattr(filter_obj, "emoticon", None),
+                                "pinnedDialogIds": pinned_ids,
+                                "includedChatIds": included_ids,
+                                "excludedChatIds": excluded_ids,
+                                "contacts": getattr(filter_obj, "contacts", False),
+                                "nonContacts": getattr(filter_obj, "non_contacts", False),
+                                "groups": getattr(filter_obj, "groups", False),
+                                "broadcasts": getattr(filter_obj, "broadcasts", False),
+                                "bots": getattr(filter_obj, "bots", False),
+                                "excludeMuted": getattr(filter_obj, "exclude_muted", False),
+                                "excludeRead": getattr(filter_obj, "exclude_read", False),
+                                "excludeArchived": getattr(filter_obj, "exclude_archived", False)
+                            })
 
                 return folders
 
             except errors.FloodWaitError as e:
                 raise FloodWait(int(getattr(e, "seconds", 0)))
             except Exception as e:
-                self._logger.debug("get_folders error: %s", type(e).__name__)
+                self._logger.error(f"get_folders error: {type(e).__name__}: {e}")
                 raise TelethonManagerError(str(e))
 
     async def get_dialogs(self, account_id: int, limit: int = 50) -> List[Dict[str, Any]]:
@@ -628,15 +647,27 @@ class TelethonManager:
             try:
                 if not await client.is_user_authorized():
                     raise NotConnected("client not authorized")
+
                 dialogs = await client.get_dialogs(limit=limit)
                 result = []
+
                 for d in dialogs:
                     ent = getattr(d, "entity", None)
-                    uid = getattr(ent, "id", None)
+                    if not ent:
+                        continue
+
+                    uid = self._get_entity_id(ent)
                     title = getattr(d, "title", None) or getattr(ent, "title", None) or getattr(ent, "first_name", None)
                     username = getattr(ent, "username", None)
-                    unread = getattr(d, "unread_count", 0) or getattr(d, "unread_count", 0)
-                    result.append({"id": uid, "title": title, "username": username, "unread_count": unread})
+                    unread = getattr(d, "unread_count", 0)
+
+                    result.append({
+                        "id": uid,
+                        "title": title,
+                        "username": username,
+                        "unread_count": unread
+                    })
+
                 return result
             except errors.FloodWaitError as e:
                 raise FloodWait(int(getattr(e, "seconds", 0)))
@@ -664,7 +695,6 @@ class TelethonManager:
         Отключает все активные клиенты и очищает внутренний словарь.
         Не логирует чувствительные данные (session_string).
         """
-        # Копируем элементы, чтобы безопасно итерироваться и изменять dict
         items = list(self._clients.items())
         errors = []
         for account_id, client in items:
