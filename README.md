@@ -443,7 +443,41 @@ Response 404:
 }
 ```
 
-### 4.2 Получить список диалогов
+### 4.2 Получить аватарку аккаунта
+
+```http
+GET /api/accounts/{accountId}/me/photo
+Authorization: Bearer {token}
+Query Parameters:
+  - size: string (default: "big") // "small" или "big"
+
+Response 200:
+Content-Type: image/jpeg
+Cache-Control: public, max-age=3600
+Content-Disposition: inline; filename=profile_{accountId}.jpg
+
+[binary image data]
+
+Response 404 (фото не установлено):
+{
+  "error": "PHOTO_NOT_FOUND",
+  "message": "У пользователя не установлено фото профиля"
+}
+
+Response 403:
+{
+  "error": "ACCOUNT_NOT_CONNECTED",
+  "message": "Аккаунт не подключен к Telegram"
+}
+
+Response 404 (аккаунт не найден):
+{
+  "error": "ACCOUNT_NOT_FOUND",
+  "message": "Аккаунт не найден"
+}
+```
+
+### 4.3 Получить список диалогов
 
 ```http
 GET /api/accounts/{accountId}/dialogs
@@ -551,7 +585,7 @@ Response 404:
 }
 ```
 
-### 4.3 Получить список папок
+### 4.4 Получить список папок
 
 ```http
 GET /api/accounts/{accountId}/folders
