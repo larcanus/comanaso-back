@@ -64,9 +64,6 @@ class AccountMeResponse(BaseModel):
     bio: Optional[str] = Field(None, description="Описание профиля")
     langCode: Optional[str] = Field(None, description="Код языка")
 
-    # Счетчики
-    accessHash: Optional[int] = Field(None, description="Access hash для API")
-
     # Флаги статуса
     isSelf: bool = Field(True, description="Это текущий пользователь")
     isContact: bool = Field(False, description="В контактах")

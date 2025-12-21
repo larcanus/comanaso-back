@@ -444,7 +444,6 @@ class TelethonManager:
                 # Базовые поля
                 result = {
                     "id": me.id,
-                    "accessHash": getattr(me, "access_hash", None),
 
                     # Имена и идентификаторы
                     "firstName": me.first_name or "",
