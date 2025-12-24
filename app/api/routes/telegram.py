@@ -4,6 +4,7 @@ API роутер для управления сессией telethon.
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -217,6 +218,44 @@ async def get_account_me(
     """
     me_data = await service.get_me(db, current_user.id, account_id)
     return AccountMeResponse(**me_data)
+
+
+@router.get(
+    "/accounts/{account_id}/me/photo",
+    summary="Получить аватарку аккаунта",
+    description="Возвращает фото профиля текущего пользователя Telegram аккаунта"
+)
+async def get_account_photo(
+        account_id: int,
+        size: str = Query(default="big", regex="^(small|big)$", description="Размер фото: small или big"),
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+        service: TelegramService = Depends(get_telegram_service)
+) -> Response:
+    """
+    Получить фото профиля текущего пользователя Telegram аккаунта.
+
+    **Параметры:**
+    - `size`: Размер фото - "small" (маленькое) или "big" (большое)
+
+    **Требования:**
+    - Аккаунт должен быть подключен к Telegram
+    - Пользователь должен быть владельцем аккаунта
+
+    **Возвращает:**
+    - Бинарные данные изображения в формате JPEG
+    - Cache-Control заголовок для кеширования
+    """
+    photo_bytes = await service.get_photo(db, current_user.id, account_id, size)
+
+    return Response(
+        content=photo_bytes,
+        media_type="image/jpeg",
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            "Content-Disposition": f"inline; filename=profile_{account_id}.jpg"
+        }
+    )
 
 
 @router.get(

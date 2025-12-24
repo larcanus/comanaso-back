@@ -514,11 +514,11 @@ class TelethonManager:
                 raise TelethonManagerError(str(e))
 
     async def get_dialogs_extended(
-        self,
-        account_id: int,
-        limit: int = 100,
-        offset: int = 0,
-        archived: bool = False
+            self,
+            account_id: int,
+            limit: int = 100,
+            offset: int = 0,
+            archived: bool = False
     ) -> Dict[str, Any]:
         """
         Получить расширенный список диалогов с полной информацией
@@ -822,3 +822,49 @@ class TelethonManager:
 
         if errors:
             self._logger.warning("disconnect_all completed with errors for accounts: %s", [a for a, _ in errors])
+
+    async def download_profile_photo(self, account_id: int, size: str = "big") -> Optional[bytes]:
+        """
+        Скачать фото профиля текущего пользователя.
+
+        Args:
+            account_id: ID аккаунта
+            size: Размер фото ("small" для маленького, "big" для большого)
+
+        Returns:
+            bytes: Бинарные данные изображения или None если фото не установлено
+
+        Raises:
+            NotConnected: Клиент не подключен
+            TelethonManagerError: Ошибка при скачивании фото
+        """
+        client = self._clients.get(account_id)
+        if not client:
+            raise NotConnected("client not created")
+        try:
+            if not await client.is_user_authorized():
+                raise NotConnected("client not authorized")
+            me = await client.get_me()
+
+            # Проверяем наличие фото
+            if not me.photo:
+                return None
+
+            # Определяем размер для скачивания
+            # small = True для маленького размера, False для большого
+            download_big = (size == "big")
+
+            # Скачиваем фото в память
+            photo_bytes = await client.download_profile_photo(
+                me,
+                file=bytes,  # Скачиваем в байты, а не в файл
+                download_big=download_big
+            )
+
+            return photo_bytes
+
+        except errors.FloodWaitError as e:
+            raise FloodWait(int(getattr(e, "seconds", 0)))
+        except Exception as e:
+            self._logger.error(f"Error downloading profile photo for account {account_id}: {type(e).__name__} - {e}")
+            raise TelethonManagerError(f"Failed to download profile photo: {str(e)}")

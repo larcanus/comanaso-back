@@ -435,7 +435,7 @@ class TelegramService:
 
     async def get_me(self, db: AsyncSession, user_id: int, account_id: int) -> Dict[str, Any]:
         """
-        Получить информацию о текущем пользователе Telegram аккаунта.
+        Получить информацию о текущем пользователе.
         """
         account = await self._get_account(db, account_id, user_id)
 
@@ -449,6 +449,54 @@ class TelegramService:
         try:
             me_data = await self.tm.get_me(account_id)
             return me_data
+        except NotConnected:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "ACCOUNT_NOT_CONNECTED", "message": "Аккаунт не подключен к Telegram"}
+            )
+        except FloodWait as e:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": getattr(e, "seconds", None)}
+            )
+        except TelethonManagerError as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"error": "TELETHON_ERROR", "message": str(e)}
+            )
+
+    async def get_photo(self, db: AsyncSession, user_id: int, account_id: int, size: str = "big") -> bytes:
+        """
+        Получить фото профиля текущего пользователя.
+
+        Args:
+            db: Сессия базы данных
+            user_id: ID пользователя
+            account_id: ID аккаунта
+            size: Размер фото ("small" или "big")
+
+        Returns:
+            bytes: Бинарные данные изображения
+
+        Raises:
+            HTTPException: При различных ошибках (не найден аккаунт, не подключен, нет фото)
+        """
+        account = await self._get_account(db, account_id, user_id)
+
+        if not account.is_connected:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "ACCOUNT_NOT_CONNECTED", "message": "Аккаунт не подключен к Telegram"}
+            )
+
+        try:
+            photo_bytes = await self.tm.download_profile_photo(account_id, size)
+            if photo_bytes is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={"error": "PHOTO_NOT_FOUND", "message": "У пользователя не установлено фото профиля"}
+                )
+            return photo_bytes
         except NotConnected:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
