@@ -492,13 +492,26 @@ class TelethonManager:
         }
 
     def _parse_entity_type(self, entity) -> str:
-        """Определяет тип entity"""
+        """
+        Определяет тип entity.
+
+        Возможные типы:
+        - user: обычный пользователь
+        - bot: бот (User с bot=True)
+        - group: обычная группа (Chat, до 200 участников)
+        - supergroup: супергруппа (Channel с broadcast=False)
+        - channel: канал (Channel с broadcast=True)
+        """
         if isinstance(entity, User):
-            return "user"
+            return "bot" if getattr(entity, "bot", False) else "user"
         elif isinstance(entity, Chat):
             return "group"
         elif isinstance(entity, Channel):
-            return "channel" if entity.broadcast else "supergroup"
+            # broadcast=True означает канал (односторонняя рассылка)
+            if getattr(entity, "broadcast", False):
+                return "channel"
+            # broadcast=False означает супергруппу (многопользовательский чат)
+            return "supergroup"
         return "unknown"
 
     def _get_entity_id(self, entity) -> Optional[int]:

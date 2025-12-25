@@ -495,7 +495,7 @@ Response 200:
     {
       "id": "1234567890",
       "name": "Иван Петров",
-      "type": "user",  // user | bot | group | channel | megagroup
+      "type": "user",  // user | bot | group | supergroup | channel
       "date": "2024-01-17T15:30:00Z",  // дата последнего сообщения
       
       // Счётчики
