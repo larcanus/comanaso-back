@@ -313,10 +313,16 @@ class TelethonManager:
         if not notify_settings:
             return None
 
+        # Конвертируем mute_until в timestamp если это datetime
+        mute_until = getattr(notify_settings, "mute_until", None)
+        if mute_until is not None and hasattr(mute_until, "timestamp"):
+            # Это datetime объект - конвертируем в unix timestamp
+            mute_until = int(mute_until.timestamp())
+
         return {
             "showPreviews": getattr(notify_settings, "show_previews", None),
             "silent": getattr(notify_settings, "silent", None),
-            "muteUntil": getattr(notify_settings, "mute_until", None),
+            "muteUntil": mute_until,
             "sound": getattr(notify_settings, "sound", None)
         }
 
@@ -327,7 +333,7 @@ class TelethonManager:
         Диалог считается заглушенным если:
         1. silent = True (беззвучные уведомления)
         2. mute_until > текущего времени (заглушено до определенного времени)
-        3. mute_until = 2147483647 (заглушено навсегда, максимальный int32)
+        3. mute_until = datetime(2038, ...) (заглушено навсегда, максимальная дата)
         """
         if not notify_settings:
             return False
@@ -345,7 +351,20 @@ class TelethonManager:
         if isinstance(mute_until, bool):
             return mute_until
 
-        # Если mute_until это число
+        # Если mute_until это datetime объект
+        if hasattr(mute_until, "timestamp"):
+            from datetime import datetime
+            now = datetime.now(mute_until.tzinfo) if mute_until.tzinfo else datetime.now()
+            # Если дата в далеком будущем (2038 год) - считаем навсегда
+            if mute_until.year >= 2038:
+                return True
+            # Если дата в прошлом (1970 год) - не заглушено
+            if mute_until.year <= 1970:
+                return False
+            # Проверяем не истек ли срок заглушения
+            return mute_until > now
+
+        # Если mute_until это число (timestamp)
         if isinstance(mute_until, int):
             # 0 означает не заглушено
             if mute_until == 0:
@@ -603,8 +622,20 @@ class TelethonManager:
                 for dialog in dialogs:
                     entity = dialog.entity
 
-                    # Получаем notify_settings
-                    notify_settings = getattr(dialog, "notify_settings", None)
+                    # ИСПРАВЛЕНО: notify_settings находится в dialog.dialog (сырой TL-объект)
+                    # dialog - это обертка Telethon, dialog.dialog - это сырой TL Dialog
+                    raw_dialog = getattr(dialog, "dialog", None)
+                    notify_settings = getattr(raw_dialog, "notify_settings", None) if raw_dialog else None
+
+                    # Логируем для отладки (можно потом убрать)
+                    if notify_settings:
+                        self._logger.debug(
+                            f"Dialog {dialog.name}: notify_settings found - "
+                            f"silent={getattr(notify_settings, 'silent', None)}, "
+                            f"mute_until={getattr(notify_settings, 'mute_until', None)}"
+                        )
+                    else:
+                        self._logger.debug(f"Dialog {dialog.name}: notify_settings is None")
 
                     # Определяем isMuted через новый метод
                     is_muted = self._is_muted(notify_settings)
