@@ -308,6 +308,57 @@ class TelethonManager:
             finally:
                 self._phone_code_hashes.pop(account_id, None)
 
+    def _parse_notify_settings(self, notify_settings) -> Optional[Dict[str, Any]]:
+        """Парсит настройки уведомлений"""
+        if not notify_settings:
+            return None
+
+        return {
+            "showPreviews": getattr(notify_settings, "show_previews", None),
+            "silent": getattr(notify_settings, "silent", None),
+            "muteUntil": getattr(notify_settings, "mute_until", None),
+            "sound": getattr(notify_settings, "sound", None)
+        }
+
+    def _is_muted(self, notify_settings) -> bool:
+        """
+        Определяет заглушен ли диалог.
+
+        Диалог считается заглушенным если:
+        1. silent = True (беззвучные уведомления)
+        2. mute_until > текущего времени (заглушено до определенного времени)
+        3. mute_until = 2147483647 (заглушено навсегда, максимальный int32)
+        """
+        if not notify_settings:
+            return False
+
+        # Проверяем беззвучный режим
+        if getattr(notify_settings, "silent", False):
+            return True
+
+        # Проверяем mute_until
+        mute_until = getattr(notify_settings, "mute_until", None)
+        if mute_until is None:
+            return False
+
+        # Если mute_until это булево значение True - заглушено навсегда
+        if isinstance(mute_until, bool):
+            return mute_until
+
+        # Если mute_until это число
+        if isinstance(mute_until, int):
+            # 0 означает не заглушено
+            if mute_until == 0:
+                return False
+            # Большое число (близко к максимальному int32) = навсегда
+            if mute_until >= 2147483647:
+                return True
+            # Проверяем не истек ли срок заглушения
+            from datetime import datetime
+            return mute_until > int(datetime.now().timestamp())
+
+        return False
+
     def _parse_user_status(self, status) -> Dict[str, Any]:
         """Парсит статус пользователя в унифицированный формат"""
         if isinstance(status, UserStatusOnline):
@@ -552,20 +603,11 @@ class TelethonManager:
                 for dialog in dialogs:
                     entity = dialog.entity
 
-                    # Правильная проверка isMuted
+                    # Получаем notify_settings
                     notify_settings = getattr(dialog, "notify_settings", None)
-                    is_muted = False
-                    if notify_settings:
-                        # mute_until может быть None (не заглушен), timestamp или True (навсегда)
-                        mute_until = getattr(notify_settings, "mute_until", None)
-                        if mute_until is not None:
-                            if isinstance(mute_until, bool):
-                                is_muted = mute_until
-                            elif isinstance(mute_until, int):
-                                # Если timestamp больше текущего времени - заглушен
-                                is_muted = mute_until > int(datetime.now().timestamp())
-                            else:
-                                is_muted = True
+
+                    # Определяем isMuted через новый метод
+                    is_muted = self._is_muted(notify_settings)
 
                     # Получаем ID entity безопасно
                     entity_id = self._get_entity_id(entity)
@@ -584,6 +626,7 @@ class TelethonManager:
                         "isMuted": is_muted,
                         "folderId": getattr(dialog, "folder_id", None),
                         "type": entity_type,
+                        "notifySettings": self._parse_notify_settings(notify_settings),
                     }
 
                     # Информация о entity

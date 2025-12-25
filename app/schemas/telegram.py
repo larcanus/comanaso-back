@@ -1,7 +1,7 @@
 """
 Pydantic схемы для Telegram Data API
 """
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Union
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -124,13 +124,21 @@ class AccountMeResponse(BaseModel):
 class LastMessageSchema(BaseModel):
     """Схема последнего сообщения в диалоге"""
     id: int = Field(..., description="ID сообщения")
-    text: str = Field("", description="Текст сообщения")
+    text: str = Field(..., description="Текст сообщения")
     date: Optional[str] = Field(None, description="Дата сообщения (ISO 8601)")
     fromId: Optional[int] = Field(None, description="ID отправителя")
     out: bool = Field(False, description="Исходящее сообщение")
     mentioned: bool = Field(False, description="Есть упоминание")
     mediaUnread: bool = Field(False, description="Медиа не просмотрено")
-    silent: bool = Field(False, description="Тихое сообщение")
+    silent: bool = Field(False, description="Беззвучное сообщение")
+
+
+class NotifySettingsSchema(BaseModel):
+    """Схема настроек уведомлений диалога"""
+    showPreviews: Optional[bool] = Field(None, description="Показывать превью")
+    silent: Optional[bool] = Field(None, description="Беззвучные уведомления")
+    muteUntil: Optional[int] = Field(None, description="Timestamp до которого заглушено (None = не заглушено)")
+    sound: Optional[str] = Field(None, description="Звук уведомления")
 
 
 class UserEntitySchema(BaseModel):
@@ -182,17 +190,30 @@ class DialogSchema(BaseModel):
     """Схема диалога"""
     id: str = Field(..., description="ID диалога")
     name: str = Field(..., description="Название диалога")
-    type: str = Field(..., description="Тип: user, bot, group, channel, megagroup")
+    type: str = Field(..., description="Тип диалога (user, bot, group, channel, megagroup)")
     date: Optional[str] = Field(None, description="Дата последнего сообщения (ISO 8601)")
+
+    # Счётчики
     unreadCount: int = Field(0, description="Количество непрочитанных")
     unreadMentionsCount: int = Field(0, description="Количество непрочитанных упоминаний")
     unreadReactionsCount: int = Field(0, description="Количество непрочитанных реакций")
+
+    # Статусы
     isArchived: bool = Field(False, description="В архиве")
     isPinned: bool = Field(False, description="Закреплен")
-    isMuted: bool = Field(False, description="Отключены уведомления")
-    folderId: Optional[int] = Field(None, description="ID папки")
+    isMuted: bool = Field(False, description="Уведомления выключены")
+
+    # Папка
+    folderId: Optional[int] = Field(None, description="ID папки (None = главная)")
+
+    # Настройки уведомлений
+    notifySettings: Optional[NotifySettingsSchema] = Field(None, description="Настройки уведомлений")
+
+    # Сообщение
     lastMessage: Optional[LastMessageSchema] = Field(None, description="Последнее сообщение")
-    entity: Any = Field(..., description="Детали сущности (зависит от типа)")
+
+    # Entity
+    entity: Union[UserEntitySchema, GroupEntitySchema, ChannelEntitySchema] = Field(..., description="Сущность диалога")
 
 
 class DialogsResponse(BaseModel):
