@@ -620,7 +620,7 @@ class TelethonManager:
             account_id: int,
             limit: int = 100,
             offset: int = 0,
-            archived: bool = False
+            archived: Optional[bool] = None  # None = все диалоги
     ) -> Dict[str, Any]:
         """
         Получить расширенный список диалогов с полной информацией
@@ -629,7 +629,10 @@ class TelethonManager:
             account_id: ID аккаунта
             limit: Количество диалогов (max 500)
             offset: Смещение для пагинации
-            archived: Включить архивные диалоги
+            archived:
+                - None - все диалоги (обычные + архивные)
+                - False - только обычные диалоги (folder_id=0)
+                - True - только архивные диалоги (folder_id=1)
 
         Returns:
             Словарь с диалогами и метаданными
@@ -644,10 +647,10 @@ class TelethonManager:
                 if not await client.is_user_authorized():
                     raise NotConnected("client not authorized")
 
-                # Получаем диалоги из Telegram
+                # archived=None вернёт ВСЕ диалоги (обычные + архивные)
                 dialogs = await client.get_dialogs(
                     limit=limit,
-                    archived=archived
+                    archived=archived  # None/False/True
                 )
 
                 result_dialogs = []

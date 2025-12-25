@@ -1,7 +1,7 @@
 """
 API роутер для управления сессией telethon.
 """
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import Response
@@ -268,7 +268,7 @@ async def get_account_dialogs(
         account_id: int,
         limit: int = Query(default=100, ge=1, le=500, description="Количество диалогов"),
         offset: int = Query(default=0, ge=0, description="Смещение для пагинации"),
-        archived: bool = Query(default=False, description="Включить архивные диалоги"),
+        archived: Optional[bool] = Query(default=None),  # None = все диалоги
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
         service: TelegramService = Depends(get_telegram_service)
@@ -279,7 +279,10 @@ async def get_account_dialogs(
     **Параметры:**
     - `limit`: Количество диалогов (максимум 500)
     - `offset`: Смещение для пагинации
-    - `archived`: Включить архивные диалоги
+    - `archived`:
+            - None (не указан) - все диалоги (обычные + архивные)
+            - false - только обычные диалоги
+            - true - только архивные диалоги
 
     **Требования:**
     - Аккаунт должен быть подключен к Telegram

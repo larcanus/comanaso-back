@@ -485,7 +485,10 @@ Authorization: Bearer {token}
 Query Parameters:
   - limit: integer (default: 100, max: 500)
   - offset: integer (default: 0)
-  - archived: boolean (default: false) // включить архивные
+  - archived`: boolean | null (optional)
+  - не указан или `null` - **все диалоги** (обычные + архивные)
+  - `false` - **только обычные** диалоги (folder_id = 0)
+  - `true` - **только архивные** диалоги (folder_id = 1)
 
 Response 200:
 {
