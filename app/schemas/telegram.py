@@ -121,6 +121,14 @@ class AccountMeResponse(BaseModel):
 # DIALOGS SCHEMAS
 # ============================================================================
 
+class DraftMessageSchema(BaseModel):
+    """Схема черновика сообщения"""
+    message: str = Field(..., description="Текст черновика")
+    date: Optional[str] = Field(None, description="Дата создания черновика (ISO 8601)")
+    replyToMsgId: Optional[int] = Field(None, description="ID сообщения, на которое отвечает черновик")
+    noWebpage: bool = Field(False, description="Не показывать превью ссылок")
+
+
 class LastMessageSchema(BaseModel):
     """Схема последнего сообщения в диалоге"""
     id: int = Field(..., description="ID сообщения")
@@ -202,6 +210,7 @@ class DialogSchema(BaseModel):
     isArchived: bool = Field(False, description="В архиве")
     isPinned: bool = Field(False, description="Закреплен")
     isMuted: bool = Field(False, description="Уведомления выключены")
+    unreadMark: bool = Field(False, description="Помечен как непрочитанный вручную")
 
     # Папка
     folderId: Optional[int] = Field(None, description="ID папки (None = главная)")
@@ -209,8 +218,9 @@ class DialogSchema(BaseModel):
     # Настройки уведомлений
     notifySettings: Optional[NotifySettingsSchema] = Field(None, description="Настройки уведомлений")
 
-    # Сообщение
+    # Сообщение и черновик
     lastMessage: Optional[LastMessageSchema] = Field(None, description="Последнее сообщение")
+    draft: Optional[DraftMessageSchema] = Field(None, description="Черновик сообщения")
 
     # Entity
     entity: Union[UserEntitySchema, GroupEntitySchema, ChannelEntitySchema] = Field(..., description="Сущность диалога")

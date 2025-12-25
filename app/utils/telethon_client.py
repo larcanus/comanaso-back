@@ -308,6 +308,25 @@ class TelethonManager:
             finally:
                 self._phone_code_hashes.pop(account_id, None)
 
+    def _parse_draft_message(self, draft) -> Optional[Dict[str, Any]]:
+        """Парсит черновик сообщения"""
+        if not draft:
+            return None
+
+        # Получаем reply_to информацию
+        reply_to_msg_id = None
+        reply_to = getattr(draft, "reply_to", None)
+        if reply_to:
+            # reply_to может быть InputReplyToMessage с reply_to_msg_id
+            reply_to_msg_id = getattr(reply_to, "reply_to_msg_id", None)
+
+        return {
+            "message": getattr(draft, "message", "") or "",
+            "date": draft.date.isoformat() if hasattr(draft, "date") and draft.date else None,
+            "replyToMsgId": reply_to_msg_id,
+            "noWebpage": getattr(draft, "no_webpage", False)
+        }
+
     def _parse_notify_settings(self, notify_settings) -> Optional[Dict[str, Any]]:
         """Парсит настройки уведомлений"""
         if not notify_settings:
@@ -644,6 +663,9 @@ class TelethonManager:
                     entity_id = self._get_entity_id(entity)
                     entity_type = self._parse_entity_type(entity)
 
+                    # Получаем черновик из сырого dialog
+                    draft = getattr(raw_dialog, "draft", None)
+
                     # Базовая информация о диалоге
                     dialog_data = {
                         "id": str(entity_id) if entity_id else "0",
@@ -658,6 +680,7 @@ class TelethonManager:
                         "folderId": getattr(dialog, "folder_id", None),
                         "type": entity_type,
                         "notifySettings": self._parse_notify_settings(notify_settings),
+                        "draft": self._parse_draft_message(draft),
                     }
 
                     # Информация о entity
