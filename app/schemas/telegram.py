@@ -135,6 +135,7 @@ class LastMessageSchema(BaseModel):
 
 class UserEntitySchema(BaseModel):
     """Схема сущности пользователя/бота"""
+    id: int = Field(..., description="ID пользователя")
     firstName: str = Field("", description="Имя")
     lastName: str = Field("", description="Фамилия")
     username: Optional[str] = Field(None, description="Username")
@@ -150,6 +151,7 @@ class UserEntitySchema(BaseModel):
 
 class GroupEntitySchema(BaseModel):
     """Схема сущности группы"""
+    id: int = Field(..., description="ID группы")
     title: str = Field(..., description="Название группы")
     participantsCount: int = Field(0, description="Количество участников")
     createdDate: Optional[str] = Field(None, description="Дата создания (ISO 8601)")
@@ -160,6 +162,7 @@ class GroupEntitySchema(BaseModel):
 
 class ChannelEntitySchema(BaseModel):
     """Схема сущности канала/мегагруппы"""
+    id: int = Field(..., description="ID канала")
     title: str = Field(..., description="Название канала")
     username: Optional[str] = Field(None, description="Username канала")
     participantsCount: int = Field(0, description="Количество подписчиков")

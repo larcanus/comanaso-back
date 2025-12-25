@@ -542,8 +542,7 @@ class TelethonManager:
                 if not await client.is_user_authorized():
                     raise NotConnected("client not authorized")
 
-                # В Telethon 1.42.0 убрали параметр offset_peer
-                # Используем только offset_date и offset_id
+                # Получаем диалоги из Telegram
                 dialogs = await client.get_dialogs(
                     limit=limit,
                     archived=archived
@@ -553,9 +552,20 @@ class TelethonManager:
                 for dialog in dialogs:
                     entity = dialog.entity
 
-                    # Проверяем notify_settings для muted
+                    # Правильная проверка isMuted
                     notify_settings = getattr(dialog, "notify_settings", None)
-                    is_muted = bool(getattr(notify_settings, "mute_until", None)) if notify_settings else False
+                    is_muted = False
+                    if notify_settings:
+                        # mute_until может быть None (не заглушен), timestamp или True (навсегда)
+                        mute_until = getattr(notify_settings, "mute_until", None)
+                        if mute_until is not None:
+                            if isinstance(mute_until, bool):
+                                is_muted = mute_until
+                            elif isinstance(mute_until, int):
+                                # Если timestamp больше текущего времени - заглушен
+                                is_muted = mute_until > int(datetime.now().timestamp())
+                            else:
+                                is_muted = True
 
                     # Получаем ID entity безопасно
                     entity_id = self._get_entity_id(entity)
@@ -584,25 +594,45 @@ class TelethonManager:
                             "lastName": entity.last_name or "",
                             "username": entity.username,
                             "phone": entity.phone,
-                            "isBot": entity.bot,
-                            "isVerified": entity.verified,
+                            "isBot": getattr(entity, "bot", False),
+                            "isVerified": getattr(entity, "verified", False),
                             "isPremium": getattr(entity, "premium", False),
+                            "isContact": getattr(entity, "contact", False),
+                            "isMutualContact": getattr(entity, "mutual_contact", False),
                             "photo": self._parse_photo(entity.photo),
                             "status": self._parse_user_status(entity.status)
                         }
-                    elif isinstance(entity, (Chat, Channel)):
+                    elif isinstance(entity, Chat):
+                        # Обычная группа
+                        dialog_data["entity"] = {
+                            "id": entity.id,
+                            "title": entity.title,
+                            "participantsCount": getattr(entity, "participants_count", 0),
+                            "createdDate": entity.date.isoformat() if getattr(entity, "date", None) else None,
+                            "isCreator": getattr(entity, "creator", False),
+                            "isAdmin": getattr(entity, "admin_rights", None) is not None,
+                            "photo": self._parse_photo(getattr(entity, "photo", None))
+                        }
+                    elif isinstance(entity, Channel):
+                        # Канал или мегагруппа
                         dialog_data["entity"] = {
                             "id": entity.id,
                             "title": entity.title,
                             "username": getattr(entity, "username", None),
-                            "participantsCount": getattr(entity, "participants_count", None),
+                            "participantsCount": getattr(entity, "participants_count", 0),
+                            "createdDate": entity.date.isoformat() if getattr(entity, "date", None) else None,
+                            "isCreator": getattr(entity, "creator", False),
+                            "isAdmin": getattr(entity, "admin_rights", None) is not None,
+                            "isBroadcast": getattr(entity, "broadcast", False),  # True = канал, False = мегагруппа
                             "isVerified": getattr(entity, "verified", False),
                             "isScam": getattr(entity, "scam", False),
                             "isFake": getattr(entity, "fake", False),
+                            "hasGeo": getattr(entity, "has_geo", False),
+                            "slowmodeEnabled": getattr(entity, "slowmode_enabled", False),
                             "photo": self._parse_photo(getattr(entity, "photo", None))
                         }
 
-                    # Последнее сообщение - ИСПРАВЛЕНО
+                    # Последнее сообщение - ИСПРАВЛЕНО (message -> lastMessage)
                     msg = getattr(dialog, "message", None)
                     if msg:
                         from_id = getattr(msg, "from_id", None)
@@ -616,13 +646,18 @@ class TelethonManager:
                             elif isinstance(from_id, PeerChat):
                                 from_user_id = from_id.chat_id
 
-                        dialog_data["message"] = {
+                        # Гарантируем, что text всегда строка (может быть None для медиа)
+                        msg_text = getattr(msg, "message", None) or ""
+
+                        dialog_data["lastMessage"] = {
                             "id": msg.id,
+                            "text": msg_text,
                             "date": msg.date.isoformat() if msg.date else None,
-                            "text": getattr(msg, "message", ""),
-                            "out": msg.out,
                             "fromId": from_user_id,
-                            "mediaType": type(msg.media).__name__ if msg.media else None,
+                            "out": getattr(msg, "out", False),
+                            "mentioned": getattr(msg, "mentioned", False),
+                            "mediaUnread": getattr(msg, "media_unread", False),
+                            "silent": getattr(msg, "silent", False)
                         }
 
                     result_dialogs.append(dialog_data)
