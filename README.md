@@ -507,20 +507,36 @@ Response 200:
       "isArchived": false,
       "isPinned": true,
       "isMuted": false,
+      "unreadMark": false,  // отмечен как непрочитанный вручную
       
       // Папка
       "folderId": null,  // null = главная папка, 0+ = ID папки
+      
+      // Черновик сообщения
+      "draft": {
+        "text": "Начатый текст сообщения...",
+        "date": "2024-01-17T14:20:00Z"
+      },
+      // или null, если черновика нет
+      
+      // Настройки уведомлений
+      "notifySettings": {
+        "showPreviews": true,        // показывать превью сообщений
+        "silent": false,             // беззвучные уведомления
+        "muteUntil": 1705507200,     // timestamp до которого отключены (null если не отключены)
+        "sound": "default"           // звук уведомления
+      },
       
       // Последнее сообщение
       "lastMessage": {
         "id": 67890,
         "text": "Привет, как дела?",
         "date": "2024-01-17T15:30:00Z",
-        "fromId": 987654321,
-        "out": false,  // исходящее или входящее
-        "mentioned": false,
-        "mediaUnread": false,
-        "silent": false
+        "fromId": "987654321",
+        "out": false,         // исходящее или входящее
+        "mentioned": false,   // есть упоминание текущего пользователя
+        "mediaUnread": false, // медиа не просмотрено
+        "silent": false       // беззвучное сообщение
       },
       
       // Детали сущности (зависит от типа)
@@ -536,11 +552,11 @@ Response 200:
         "isContact": true,
         "isMutualContact": true,
         "photo": {
-          "photoId": "...",
+          "photoId": "5234567890123456789",
           "dcId": 2
         },
         "status": {
-          "type": "online",
+          "type": "online",  // online | offline | recently | lastWeek | lastMonth
           "wasOnline": "2024-01-17T15:30:00Z"
         },
         
@@ -550,7 +566,10 @@ Response 200:
         "createdDate": "2023-05-10T10:00:00Z",
         "isCreator": false,
         "isAdmin": true,
-        "photo": { /* ... */ },
+        "photo": {
+          "photoId": "5234567890123456789",
+          "dcId": 2
+        },
         
         // Для channel/megagroup:
         "title": "Новости компании",
@@ -565,9 +584,12 @@ Response 200:
         "isFake": false,
         "hasGeo": false,
         "slowmodeEnabled": false,
-        "photo": { /* ... */ }
+        "photo": {
+          "photoId": "5234567890123456789",
+          "dcId": 2
+        }
       }
-    },
+    }
     // ... остальные диалоги
   ]
 }
