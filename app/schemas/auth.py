@@ -222,6 +222,46 @@ class TokenData(BaseModel):
     username: str | None = None
 
 
+class DeleteAccountResponse(BaseModel):
+    """
+    Схема ответа при удалении учетной записи.
+
+    Attributes:
+        status: Статус операции
+        message: Сообщение о результате
+        deleted_user_id: ID удаленного пользователя
+        deleted_accounts_count: Количество удаленных Telegram аккаунтов
+    """
+
+    status: str = Field(
+        ...,
+        description="Статус операции"
+    )
+    message: str = Field(
+        ...,
+        description="Сообщение о результате"
+    )
+    deleted_user_id: int = Field(
+        ...,
+        description="ID удаленного пользователя"
+    )
+    deleted_accounts_count: int = Field(
+        ...,
+        description="Количество удаленных Telegram аккаунтов"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "status": "success",
+                "message": "Учетная запись и все связанные данные успешно удалены",
+                "deleted_user_id": 1,
+                "deleted_accounts_count": 3
+            }
+        }
+    }
+
+
 class UserResponse(BaseModel):
     """
     Схема ответа с данными пользователя (deprecated, используйте UserData).

@@ -118,6 +118,39 @@ Response 401:
 }
 ```
 
+### 1.5 Удаление учетной записи
+
+```http
+DELETE /api/auth/delete-account
+Authorization: Bearer {token}
+
+Response 200:
+{
+  "status": "success",
+  "message": "Учетная запись и все связанные данные успешно удалены",
+  "deleted_user_id": 1,
+  "deleted_accounts_count": 3
+}
+
+Response 401:
+{
+  "error": "UNAUTHORIZED",
+  "message": "Требуется авторизация"
+}
+
+Response 404:
+{
+  "error": "USER_NOT_FOUND",
+  "message": "Пользователь не найден"
+}
+
+Response 500:
+{
+  "error": "DELETE_FAILED",
+  "message": "Не удалось удалить учетную запись"
+}
+```
+
 ---
 
 ## 2. TELEGRAM ACCOUNTS

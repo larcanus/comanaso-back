@@ -146,6 +146,81 @@ function Test-LogoutInvalidToken {
     }
 }
 
+function Test-DeleteAccount {
+    param($Token)
+    Write-Info "`n=== TEST: Delete User Account ==="
+    if (-not $Token) { Write-Error "✗ No token provided"; return $null }
+
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer $Token"
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/delete-account" -Method Delete -Headers $authHeaders -StatusCodeVariable statusCode
+        Write-Success "✓ Account deletion successful"
+        Show-Response $response $statusCode
+
+        # Проверка структуры ответа
+        if ($response.status -eq "success" -and $response.deleted_user_id -and $response.deleted_accounts_count -ge 0) {
+            Write-Success "✓ Response structure is correct"
+        } else {
+            Write-Error "✗ Response structure is incorrect"
+        }
+
+        return $response
+    }
+    catch {
+        Write-Error "✗ Account deletion failed"
+        Write-Host $_.Exception.Message
+        return $null
+    }
+}
+
+function Test-DeleteAccountInvalidToken {
+    Write-Info "`n=== TEST: Delete Account with Invalid Token ==="
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer invalid_token_xyz123"
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/delete-account" -Method Delete -Headers $authHeaders -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected invalid token"
+        $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Info "Error response:"
+        $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+        $errorCode = if ($errorDetails.detail -and $errorDetails.detail.error) {
+            $errorDetails.detail.error
+        } elseif ($errorDetails.error) {
+            $errorDetails.error
+        } else {
+            $null
+        }
+
+        if ($errorCode -eq "UNAUTHORIZED") {
+            Write-Success "✓ Error code is correct (UNAUTHORIZED)"
+        } else {
+            Write-Error "✗ Expected error code UNAUTHORIZED, got: $errorCode"
+        }
+    }
+}
+
+function Test-DeleteAccountWithoutToken {
+    Write-Info "`n=== TEST: Delete Account Without Token ==="
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/delete-account" -Method Delete -Headers $HEADERS -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected request without token"
+        Write-Host "Error: $($_.Exception.Message)"
+    }
+}
+
 function Test-LogoutWithoutToken {
     Write-Info "`n=== TEST: Logout Without Token ==="
 
@@ -643,6 +718,18 @@ function Run-AllTests {
     Test-LogoutInvalidToken; Start-Sleep -Seconds 1
     Test-LogoutWithoutToken; Start-Sleep -Seconds 1
 
+    Write-Host "`n=== ACCOUNT DELETION TESTS ===" -ForegroundColor Yellow
+    # Тесты удаления учетной записи (нужно создать нового пользователя, так как предыдущий мог быть удален)
+    Write-Info "Creating new user for account deletion tests..."
+    $deleteTestUser = Test-Register; Start-Sleep -Seconds 1
+    $deleteToken = Test-Login; Start-Sleep -Seconds 1
+
+    if ($deleteToken) {
+        Test-DeleteAccount -Token $deleteToken; Start-Sleep -Seconds 1
+    }
+    Test-DeleteAccountInvalidToken; Start-Sleep -Seconds 1
+    Test-DeleteAccountWithoutToken; Start-Sleep -Seconds 1
+
     Write-Host "`n=== DUPLICATE & EDGE CASES ===" -ForegroundColor Yellow
     # Дубликаты и граничные случаи
     Test-DuplicateLogin; Start-Sleep -Seconds 1
@@ -690,6 +777,8 @@ function Show-Menu {
     Write-Host "16. Test Invalid Token"
     Write-Host "17. Test Verify Invalid Token"
     Write-Host "18. Test Verify Without Token"
+    Write-Host "28. Test Delete Account Invalid Token"
+    Write-Host "29. Test Delete Account Without Token"
     Write-Host ""
     Write-Host "LOGOUT TESTS:"
     Write-Host "24. Test Logout (requires token)"
@@ -738,6 +827,9 @@ if ($args.Count -eq 0) {
             "24" { if (-not $token) { $token = Read-Host "Enter token" }; Test-Logout -Token $token }
             "25" { Test-LogoutInvalidToken }
             "26" { Test-LogoutWithoutToken }
+            "27" { if (-not $token) { $token = Read-Host "Enter token" }; Test-DeleteAccount -Token $token }
+            "28" { Test-DeleteAccountInvalidToken }
+            "29" { Test-DeleteAccountWithoutToken }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
         }

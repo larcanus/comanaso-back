@@ -2,14 +2,14 @@
 API роутер для управления авторизацией юзеров.
 """
 from typing import Annotated
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.auth import (
     UserRegister, UserLogin, AuthResponse, TokenVerifyResponse,
-    UserData, UserResponse, LogoutResponse
+    UserData, UserResponse, LogoutResponse, DeleteAccountResponse
 )
 from app.services.auth_service import AuthService
 from app.api.dependencies import CurrentUser, get_current_user, security
@@ -237,6 +237,96 @@ async def logout(current_user: CurrentUser) -> LogoutResponse:
     return LogoutResponse(
         status="success",
         message="Вы успешно вышли из системы"
+    )
+
+
+@router.delete(
+    "/delete-account",
+    response_model=DeleteAccountResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Полное удаление учетной записи",
+    description="Удаляет учетную запись пользователя, все Telegram аккаунты и связанные данные",
+    responses={
+        200: {
+            "description": "Учетная запись успешно удалена",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "success",
+                        "message": "Учетная запись и все связанные данные успешно удалены",
+                        "deleted_user_id": 1,
+                        "deleted_accounts_count": 3
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Требуется авторизация",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "UNAUTHORIZED",
+                        "message": "Требуется авторизация"
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Пользователь не найден",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "USER_NOT_FOUND",
+                        "message": "Пользователь не найден"
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "Ошибка при удалении",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "DELETE_FAILED",
+                        "message": "Не удалось удалить учетную запись"
+                    }
+                }
+            }
+        }
+    }
+)
+async def delete_account(
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    request: Request
+) -> DeleteAccountResponse:
+    """
+    Полное удаление учетной записи текущего пользователя.
+
+    Удаляет:
+    - Данные пользователя из системы
+    - Все связанные Telegram аккаунты
+    - Все данные аккаунтов (сессии, настройки и т.д.)
+
+    **Внимание**: Эта операция необратима. Все данные будут безвозвратно удалены.
+
+    Требует JWT токен в заголовке Authorization.
+    """
+    # Получаем TelethonManager из app.state для отключения клиентов
+    telethon_manager = getattr(request.app.state, "telethon_manager", None)
+
+    # Удаляем учетную запись
+    delete_result = await AuthService.delete_user_account(
+        db=db,
+        user_id=current_user.id,
+        telethon_manager=telethon_manager
+    )
+
+    return DeleteAccountResponse(
+        status="success",
+        message="Учетная запись и все связанные данные успешно удалены",
+        deleted_user_id=delete_result["deleted_user_id"],
+        deleted_accounts_count=delete_result["deleted_accounts_count"]
     )
 
 

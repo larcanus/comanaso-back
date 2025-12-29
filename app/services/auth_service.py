@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.schemas.auth import (
@@ -207,3 +208,78 @@ class AuthService:
             )
 
         return user
+
+    @staticmethod
+    async def delete_user_account(
+        db: AsyncSession,
+        user_id: int,
+        telethon_manager = None
+    ) -> dict:
+        """
+        Полное удаление учетной записи пользователя и всех связанных данных.
+
+        Args:
+            db: Асинхронная сессия базы данных
+            user_id: ID пользователя для удаления
+            telethon_manager: Опционально, экземпляр TelethonManager для отключения клиентов
+
+        Returns:
+            dict: Информация об удалении (deleted_user_id, deleted_accounts_count)
+
+        Raises:
+            HTTPException: Если пользователь не найден или произошла ошибка при удалении
+        """
+        logger.info(f"Attempting to delete user account with ID: {user_id}")
+
+        # Получаем пользователя с аккаунтами
+        stmt = select(User).where(User.id == user_id).options(
+            selectinload(User.accounts)
+        )
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            logger.warning(f"User not found for deletion: {user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "USER_NOT_FOUND",
+                    "message": "Пользователь не найден"
+                }
+            )
+
+        # Подсчитываем количество аккаунтов для ответа
+        accounts_count = len(user.accounts)
+        logger.info(f"User has {accounts_count} Telegram accounts to delete")
+
+        # Если передан telethon_manager, отключаем все клиенты пользователя
+        if telethon_manager:
+            try:
+                # Отключаем все аккаунты пользователя
+                for account in user.accounts:
+                    await telethon_manager.disconnect_client(account.id)
+                logger.info(f"Disconnected all Telethon clients for user {user_id}")
+            except Exception as e:
+                logger.warning(f"Error disconnecting Telethon clients: {e}")
+                # Продолжаем удаление даже если отключение не удалось
+
+        # Удаляем пользователя (каскадное удаление аккаунтов произойдет автоматически)
+        try:
+            await db.delete(user)
+            await db.commit()
+            logger.info(f"User account deleted successfully: {user_id}")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to delete user account: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": "DELETE_FAILED",
+                    "message": "Не удалось удалить учетную запись"
+                }
+            )
+
+        return {
+            "deleted_user_id": user_id,
+            "deleted_accounts_count": accounts_count
+        }
