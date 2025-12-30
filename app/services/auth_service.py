@@ -1,5 +1,6 @@
 import logging
 import re
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, or_
@@ -9,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.schemas.auth import (
-    UserRegister, UserLogin, AuthResponse, UserData
+    UserRegister, UserLogin, AuthResponse, UserData, UpdateUserProfile, UserProfile, UserSettings
 )
 from app.utils.jwt import create_access_token
 from app.utils.security import hash_password, verify_password
@@ -283,3 +284,130 @@ class AuthService:
             "deleted_user_id": user_id,
             "deleted_accounts_count": accounts_count
         }
+
+    @staticmethod
+    async def update_user_profile(
+            db: AsyncSession,
+            user_id: int,
+            update_data: UpdateUserProfile
+    ) -> UserProfile:
+        """
+        Обновление профиля пользователя.
+
+        Args:
+            db: Асинхронная сессия базы данных
+            user_id: ID пользователя
+            update_data: Данные для обновления
+
+        Returns:
+            UserProfile: Обновленные данные профиля
+
+        Raises:
+            HTTPException 404: Пользователь не найден
+            HTTPException 400: Username или email уже существуют
+        """
+        try:
+            # Получаем пользователя
+            result = await db.execute(
+                select(User).filter(User.id == user_id)
+            )
+            user = result.scalar_one_or_none()
+
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={
+                        "error": "USER_NOT_FOUND",
+                        "message": "Пользователь не найден"
+                    }
+                )
+
+            # Проверяем username на уникальность
+            if update_data.username is not None:
+                result = await db.execute(
+                    select(User).filter(
+                        User.username == update_data.username,
+                        User.id != user_id
+                    )
+                )
+                existing_user = result.scalar_one_or_none()
+                if existing_user:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail={
+                            "error": "USERNAME_EXISTS",
+                            "message": "Пользователь с таким username уже существует"
+                        }
+                    )
+                user.username = update_data.username
+
+            # Проверяем email на уникальность
+            if update_data.email is not None:
+                result = await db.execute(
+                    select(User).filter(
+                        User.email == update_data.email,
+                        User.id != user_id
+                    )
+                )
+                existing_user = result.scalar_one_or_none()
+                if existing_user:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail={
+                            "error": "EMAIL_EXISTS",
+                            "message": "Пользователь с таким email уже существует"
+                        }
+                    )
+                user.email = update_data.email
+
+            # Обновляем настройки
+            if update_data.settings is not None:
+                # Получаем текущие настройки как dict
+                current_settings = user.settings or {}
+                # Обновляем только переданные настройки
+                for key, value in update_data.settings.items():
+                    current_settings[key] = value
+                # Устанавливаем обновленные настройки
+                user.settings = current_settings
+
+            user.updated_at = datetime.utcnow()
+            await db.commit()
+            await db.refresh(user)
+
+            # Получаем настройки из JSON
+            settings_dict = user.settings or {}
+
+            return UserProfile(
+                id=user.id,
+                username=user.username,
+                email=user.email,
+                settings=UserSettings(
+                    shareUserName=settings_dict.get('shareUserName', True),
+                    shareNickname=settings_dict.get('shareNickname', True),
+                    shareMessageText=settings_dict.get('shareMessageText', True),
+                    shareDialogTitles=settings_dict.get('shareDialogTitles', True)
+                ),
+                createdAt=user.created_at.isoformat() + "Z",
+                updatedAt=user.updated_at.isoformat() + "Z"
+            )
+        except HTTPException:
+            await db.rollback()
+            raise
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "UPDATE_FAILED",
+                    "message": "Не удалось обновить профиль: данные уже используются"
+                }
+            )
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": "UPDATE_FAILED",
+                    "message": f"Не удалось обновить профиль: {str(e)}"
+                }
+            )

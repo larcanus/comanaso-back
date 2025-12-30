@@ -668,6 +668,312 @@ function Test-RegisterBoundaryPassword {
     }
 }
 
+# ============================================
+# PROFILE MANAGEMENT TESTS
+# ============================================
+
+function Test-GetProfile {
+    param($Token)
+    Write-Info "`n=== TEST: Get User Profile ==="
+    if (-not $Token) { Write-Error "✗ No token provided"; return $null }
+
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer $Token"
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/me" -Method Get -Headers $authHeaders -StatusCodeVariable statusCode
+        Write-Success "✓ Profile retrieved successfully"
+        Show-Response $response $statusCode
+
+        # Проверка структуры ответа
+        if ($response.id -and $response.username -and $response.settings) {
+            Write-Success "✓ Response structure is correct"
+        } else {
+            Write-Error "✗ Response structure is incorrect"
+        }
+
+        return $response
+    }
+    catch {
+        Write-Error "✗ Failed to get profile"
+        Write-Host $_.Exception.Message
+        return $null
+    }
+}
+
+function Test-UpdateProfile {
+    param($Token)
+    Write-Info "`n=== TEST: Update User Profile (Full) ==="
+    if (-not $Token) { Write-Error "✗ No token provided"; return $null }
+
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer $Token"
+
+    $timestamp = Get-Date -Format "HHmmss"
+    $body = @{
+        username = "updated_user_$timestamp"
+        email = "updated_$timestamp@example.com"
+        settings = @{
+            language = "en"
+            theme = "dark"
+            notifications_enabled = $true
+        }
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/me" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
+        Write-Success "✓ Profile updated successfully"
+        Show-Response $response $statusCode
+
+        # Проверка обновленных данных
+        if ($response.username -like "updated_user_*" -and $response.email -like "updated_*@example.com") {
+            Write-Success "✓ Profile data updated correctly"
+        } else {
+            Write-Error "✗ Profile data was not updated"
+        }
+
+        return $response
+    }
+    catch {
+        Write-Error "✗ Failed to update profile"
+        Write-Host $_.Exception.Message
+        return $null
+    }
+}
+
+function Test-UpdateProfilePartial {
+    param($Token)
+    Write-Info "`n=== TEST: Update Profile (Partial - Settings Only) ==="
+    if (-not $Token) { Write-Error "✗ No token provided"; return $null }
+
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer $Token"
+
+    $body = @{
+        settings = @{
+            theme = "light"
+            notifications_enabled = $false
+        }
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/me" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
+        Write-Success "✓ Profile settings updated successfully"
+        Show-Response $response $statusCode
+
+        # Проверка обновленных настроек
+        if ($response.settings.theme -eq "light" -and $response.settings.notifications_enabled -eq $false) {
+            Write-Success "✓ Settings updated correctly"
+        } else {
+            Write-Error "✗ Settings were not updated correctly"
+        }
+
+        return $response
+    }
+    catch {
+        Write-Error "✗ Failed to update profile settings"
+        Write-Host $_.Exception.Message
+        return $null
+    }
+}
+
+function Test-UpdateProfileDuplicateUsername {
+    param($Token, $ExistingUsername)
+    Write-Info "`n=== TEST: Update Profile with Duplicate Username ==="
+    if (-not $Token) { Write-Error "✗ No token provided"; return }
+    if (-not $ExistingUsername) { Write-Error "✗ No existing username provided"; return }
+
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer $Token"
+
+    $body = @{
+        username = $ExistingUsername
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/me" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected duplicate username"
+        $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Info "Error response:"
+        $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+        $errorCode = if ($errorDetails.detail -and $errorDetails.detail.error) {
+            $errorDetails.detail.error
+        } elseif ($errorDetails.error) {
+            $errorDetails.error
+        } else {
+            $null
+        }
+
+        if ($errorCode -eq "USERNAME_EXISTS") {
+            Write-Success "✓ Error code is correct (USERNAME_EXISTS)"
+        } else {
+            Write-Error "✗ Expected error code USERNAME_EXISTS, got: $errorCode"
+        }
+    }
+}
+
+function Test-UpdateProfileDuplicateEmail {
+    param($Token, $ExistingEmail)
+    Write-Info "`n=== TEST: Update Profile with Duplicate Email ==="
+    if (-not $Token) { Write-Error "✗ No token provided"; return }
+    if (-not $ExistingEmail) { Write-Error "✗ No existing email provided"; return }
+
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer $Token"
+
+    $body = @{
+        email = $ExistingEmail
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/me" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected duplicate email"
+        $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Info "Error response:"
+        $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+        $errorCode = if ($errorDetails.detail -and $errorDetails.detail.error) {
+            $errorDetails.detail.error
+        } elseif ($errorDetails.error) {
+            $errorDetails.error
+        } else {
+            $null
+        }
+
+        if ($errorCode -eq "EMAIL_EXISTS") {
+            Write-Success "✓ Error code is correct (EMAIL_EXISTS)"
+        } else {
+            Write-Error "✗ Expected error code EMAIL_EXISTS, got: $errorCode"
+        }
+    }
+}
+
+function Test-UpdateProfileInvalidToken {
+    Write-Info "`n=== TEST: Update Profile with Invalid Token ==="
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer invalid_token_xyz123"
+
+    $body = @{
+        username = "newusername"
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/me" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected invalid token"
+        $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Info "Error response:"
+        $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+        $errorCode = if ($errorDetails.detail -and $errorDetails.detail.error) {
+            $errorDetails.detail.error
+        } elseif ($errorDetails.error) {
+            $errorDetails.error
+        } else {
+            $null
+        }
+
+        if ($errorCode -eq "UNAUTHORIZED") {
+            Write-Success "✓ Error code is correct (UNAUTHORIZED)"
+        } else {
+            Write-Error "✗ Expected error code UNAUTHORIZED, got: $errorCode"
+        }
+    }
+}
+
+function Test-UpdateProfileInvalidData {
+    param($Token)
+    Write-Info "`n=== TEST: Update Profile with Invalid Data ==="
+    if (-not $Token) { Write-Error "✗ No token provided"; return }
+
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer $Token"
+
+    $body = @{
+        username = "ab"  # Слишком короткий
+        email = "invalid-email"  # Невалидный email
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/me" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected invalid data"
+        $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Info "Error response:"
+        $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+        if ($errorDetails.error -eq "VALIDATION_ERROR") {
+            Write-Success "✓ Error code is correct (VALIDATION_ERROR)"
+        } else {
+            Write-Error "✗ Expected error code VALIDATION_ERROR, got: $($errorDetails.error)"
+        }
+    }
+}
+
+function Test-UpdateProfileFull {
+    Write-Host "`n=== TEST: Update User Profile (Full) ===" -ForegroundColor Cyan
+
+    $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $newUsername = "updated_user_$timestamp"
+    $newEmail = "updated_$timestamp@test.com"
+
+    $body = @{
+        username = $newUsername
+        email = $newEmail
+        settings = @{
+            shareUserName = $false
+            shareNickname = $true
+            shareMessageText = $false
+            shareDialogTitles = $true
+        }
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$baseUrl/auth/me" -Method Patch `
+            -Headers $headers -Body $body -ContentType "application/json"
+
+        Write-Success "✓ Profile updated successfully"
+        Write-Host "Response:" -ForegroundColor Gray
+        $response | ConvertTo-Json -Depth 10
+
+        # Проверка обновленных данных
+        if ($response.username -eq $newUsername -and
+            $response.email -eq $newEmail -and
+            $response.settings.shareUserName -eq $false -and
+            $response.settings.shareNickname -eq $true) {
+            Write-Success "✓ Profile data updated correctly"
+            Write-Host "  Username: $($response.username)" -ForegroundColor Cyan
+            Write-Host "  Email: $($response.email)" -ForegroundColor Cyan
+            Write-Host "  Settings updated" -ForegroundColor Cyan
+        } else {
+            Write-Error "✗ Profile data not updated as expected"
+        }
+    } catch {
+        Write-Error "✗ Failed to update profile"
+        if ($_.ErrorDetails.Message) {
+            $errorObj = $_.ErrorDetails.Message | ConvertFrom-Json
+            Write-Host "Error: $($errorObj.error) - $($errorObj.message)" -ForegroundColor Red
+        } else {
+            Write-Host $_.Exception.Message -ForegroundColor Red
+        }
+    }
+}
+
 function Run-AllTests {
     Write-Host "`n╔════════════════════════════════════════╗" -ForegroundColor Yellow
     Write-Host "║   COMANASO AUTH API TESTS              ║" -ForegroundColor Yellow
@@ -740,6 +1046,57 @@ function Run-AllTests {
     Test-RegisterBoundaryLogin; Start-Sleep -Seconds 1
     Test-RegisterBoundaryPassword; Start-Sleep -Seconds 1
 
+    Write-Host "`n=== PROFILE MANAGEMENT TESTS ===" -ForegroundColor Yellow
+    # Создаем нового пользователя для тестов профиля
+    Write-Info "Creating new user for profile tests..."
+    $profileUser = Test-Register; Start-Sleep -Seconds 1
+    $profileToken = Test-Login; Start-Sleep -Seconds 1
+
+    if ($profileToken) {
+        # Получение профиля
+        $profile = Test-GetProfile -Token $profileToken; Start-Sleep -Seconds 1
+
+        # Обновление профиля (полное)
+        Test-UpdateProfile -Token $profileToken; Start-Sleep -Seconds 1
+
+        # Частичное обновление (только settings)
+        Test-UpdateProfilePartial -Token $profileToken; Start-Sleep -Seconds 1
+
+        # Создаем второго пользователя для тестов дубликатов
+        Write-Info "Creating second user for duplicate tests..."
+        $timestamp = Get-Date -Format "HHmmss"
+        $secondUserBody = @{
+            login = "second_user_$timestamp"
+            password = "Password123"
+        } | ConvertTo-Json
+        try {
+            $secondUser = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $secondUserBody
+            $secondToken = Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -Headers $HEADERS -Body $secondUserBody
+
+            # Обновляем второго пользователя с уникальными данными
+            $updateSecondBody = @{
+                username = "existing_username_$timestamp"
+                email = "existing_$timestamp@example.com"
+            } | ConvertTo-Json
+            $authHeaders = $HEADERS.Clone()
+            $authHeaders["Authorization"] = "Bearer $($secondToken.token)"
+            Invoke-RestMethod -Uri "$BASE_URL/auth/me" -Method Patch -Headers $authHeaders -Body $updateSecondBody | Out-Null
+
+            # Тестируем дубликаты с первым пользователем
+            Test-UpdateProfileDuplicateUsername -Token $profileToken -ExistingUsername "existing_username_$timestamp"; Start-Sleep -Seconds 1
+            Test-UpdateProfileDuplicateEmail -Token $profileToken -ExistingEmail "existing_$timestamp@example.com"; Start-Sleep -Seconds 1
+        }
+        catch {
+            Write-Warning "⚠ Could not create second user for duplicate tests"
+        }
+
+        # Тесты с невалидными данными
+        Test-UpdateProfileInvalidData -Token $profileToken; Start-Sleep -Seconds 1
+    }
+
+    # Тесты с невалидным токеном
+    Test-UpdateProfileInvalidToken; Start-Sleep -Seconds 1
+
     # ФИНАЛЬНАЯ ОЧИСТКА
     Write-Host "`n=== FINAL CLEANUP ===" -ForegroundColor Yellow
     Start-Sleep -Seconds 2
@@ -784,6 +1141,15 @@ function Show-Menu {
     Write-Host "24. Test Logout (requires token)"
     Write-Host "25. Test Logout Invalid Token"
     Write-Host "26. Test Logout Without Token"
+    Write-Host ""
+    Write-Host "PROFILE MANAGEMENT:"
+    Write-Host "30. Test Get Profile (requires token)"
+    Write-Host "31. Test Update Profile Full (requires token)"
+    Write-Host "32. Test Update Profile Partial (requires token)"
+    Write-Host "33. Test Update Profile Duplicate Username"
+    Write-Host "34. Test Update Profile Duplicate Email"
+    Write-Host "35. Test Update Profile Invalid Data (requires token)"
+    Write-Host "36. Test Update Profile Invalid Token"
     Write-Host ""
     Write-Host "OTHER TESTS:"
     Write-Host "19. Test Duplicate Login (400)"
@@ -830,6 +1196,21 @@ if ($args.Count -eq 0) {
             "27" { if (-not $token) { $token = Read-Host "Enter token" }; Test-DeleteAccount -Token $token }
             "28" { Test-DeleteAccountInvalidToken }
             "29" { Test-DeleteAccountWithoutToken }
+            "30" { if (-not $token) { $token = Read-Host "Enter token" }; Test-GetProfile -Token $token }
+            "31" { if (-not $token) { $token = Read-Host "Enter token" }; Test-UpdateProfile -Token $token }
+            "32" { if (-not $token) { $token = Read-Host "Enter token" }; Test-UpdateProfilePartial -Token $token }
+            "33" {
+                if (-not $token) { $token = Read-Host "Enter token" }
+                $existingUsername = Read-Host "Enter existing username to test duplicate"
+                Test-UpdateProfileDuplicateUsername -Token $token -ExistingUsername $existingUsername
+            }
+            "34" {
+                if (-not $token) { $token = Read-Host "Enter token" }
+                $existingEmail = Read-Host "Enter existing email to test duplicate"
+                Test-UpdateProfileDuplicateEmail -Token $token -ExistingEmail $existingEmail
+            }
+            "35" { if (-not $token) { $token = Read-Host "Enter token" }; Test-UpdateProfileInvalidData -Token $token }
+            "36" { Test-UpdateProfileInvalidToken }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
         }

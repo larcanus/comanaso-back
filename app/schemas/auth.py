@@ -2,8 +2,49 @@
 Pydantic схемы для аутентификации.
 Валидация данных для регистрации, логина и токенов.
 """
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, EmailStr
 from datetime import datetime
+from typing import Optional
+
+
+class UserSettings(BaseModel):
+    """
+    Схема настроек пользователя для AI.
+
+    Attributes:
+        shareUserName: Разрешить передачу имени пользователя (firstName, lastName)
+        shareNickname: Разрешить передачу username (@nickname)
+        shareMessageText: Разрешить передачу текста последних сообщений
+        shareDialogTitles: Разрешить передачу названий диалогов
+    """
+
+    shareUserName: bool = Field(
+        default=True,
+        description="Разрешить передачу имени пользователя"
+    )
+    shareNickname: bool = Field(
+        default=True,
+        description="Разрешить передачу username"
+    )
+    shareMessageText: bool = Field(
+        default=True,
+        description="Разрешить передачу текста сообщений"
+    )
+    shareDialogTitles: bool = Field(
+        default=True,
+        description="Разрешить передачу названий диалогов"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "shareUserName": True,
+                "shareNickname": True,
+                "shareMessageText": True,
+                "shareDialogTitles": True
+            }
+        }
+    }
 
 
 class UserRegister(BaseModel):
@@ -80,6 +121,105 @@ class UserData(BaseModel):
             login=login,
             createdAt=user.created_at.isoformat() + "Z"
         )
+
+
+class UserProfile(BaseModel):
+    """
+    Схема полного профиля пользователя (для /me).
+
+    Attributes:
+        id: ID пользователя
+        username: Имя пользователя
+        email: Email (может быть None)
+        settings: Настройки пользователя
+        createdAt: Дата создания (ISO 8601)
+        updatedAt: Дата обновления (ISO 8601)
+    """
+
+    id: int
+    username: str
+    email: Optional[str] = None
+    settings: UserSettings
+    createdAt: str
+    updatedAt: str
+
+    @classmethod
+    def from_user(cls, user):
+        """Создание из модели User."""
+        return cls(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            settings=UserSettings(**user.settings),
+            createdAt=user.created_at.isoformat() + "Z",
+            updatedAt=user.updated_at.isoformat() + "Z"
+        )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "id": 1,
+                "username": "john_doe",
+                "email": "user@example.com",
+                "settings": {
+                    "shareUserName": True,
+                    "shareNickname": True,
+                    "shareMessageText": True,
+                    "shareDialogTitles": True
+                },
+                "createdAt": "2024-01-15T10:30:00Z",
+                "updatedAt": "2024-01-17T15:30:00Z"
+            }
+        }
+    }
+
+
+class UpdateUserProfile(BaseModel):
+    """
+    Схема для обновления профиля пользователя.
+
+    Attributes:
+        username: Новое имя пользователя (опционально)
+        email: Новый email (опционально)
+        settings: Новые настройки (опционально)
+    """
+
+    username: Optional[str] = Field(
+        None,
+        min_length=3,
+        max_length=100,
+        description="Новое имя пользователя"
+    )
+    email: Optional[EmailStr] = Field(
+        None,
+        description="Новый email"
+    )
+    settings: Optional[UserSettings] = Field(
+        None,
+        description="Новые настройки пользователя"
+    )
+
+    @validator("username")
+    def validate_username(cls, v):
+        """Валидация username."""
+        if v is not None:
+            return v.lower().strip()
+        return v
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "username": "new_username",
+                "email": "newemail@example.com",
+                "settings": {
+                    "shareUserName": False,
+                    "shareNickname": True,
+                    "shareMessageText": False,
+                    "shareDialogTitles": True
+                }
+            }
+        }
+    }
 
 
 class AuthResponse(BaseModel):

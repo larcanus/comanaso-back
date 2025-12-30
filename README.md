@@ -151,6 +151,93 @@ Response 500:
 }
 ```
 
+### 1.6 Получение профиля пользователя
+
+```http
+GET /api/auth/me
+Authorization: Bearer {token}
+
+Response 200:
+{
+  "id": 1,
+  "username": "john_doe",
+  "email": "user@example.com",
+  "settings": {
+    "shareUserName": true,      // Разрешить передачу имени пользователя в AI
+    "shareNickname": true,       // Разрешить передачу username в AI
+    "shareMessageText": true,    // Разрешить передачу текста сообщений в AI
+    "shareDialogTitles": true    // Разрешить передачу названий диалогов в AI
+  },
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-17T15:30:00Z"
+}
+
+Response 401:
+{
+  "error": "UNAUTHORIZED",
+  "message": "Требуется авторизация"
+}
+```
+
+### 1.7 Обновление профиля пользователя
+
+```http
+PATCH /api/auth/me
+Authorization: Bearer {token}
+Content-Type: application/json
+
+Request:
+{
+  "username": "new_username",     // опционально, 3-100 символов
+  "email": "newemail@example.com", // опционально, валидный email
+  "settings": {                    // опционально, объект с настройками
+    "shareUserName": false,
+    "shareNickname": true,
+    "shareMessageText": false,
+    "shareDialogTitles": true
+  }
+}
+
+Response 200:
+{
+  "id": 1,
+  "username": "new_username",
+  "email": "newemail@example.com",
+  "settings": {
+    "shareUserName": false,
+    "shareNickname": true,
+    "shareMessageText": false,
+    "shareDialogTitles": true
+  },
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-17T16:45:00Z"
+}
+
+Response 400 (username занят):
+{
+  "error": "USERNAME_EXISTS",
+  "message": "Пользователь с таким именем уже существует"
+}
+
+Response 400 (email занят):
+{
+  "error": "EMAIL_EXISTS",
+  "message": "Пользователь с таким email уже существует"
+}
+
+Response 401:
+{
+  "error": "UNAUTHORIZED",
+  "message": "Требуется авторизация"
+}
+
+Response 422:
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Неверный формат данных"
+}
+```
+
 ---
 
 ## 2. TELEGRAM ACCOUNTS

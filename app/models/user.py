@@ -3,9 +3,9 @@ SQLAlchemy модель пользователя.
 Хранит данные о пользователях системы.
 """
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, Boolean
+from sqlalchemy import String, DateTime, Boolean, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING, Dict, Any
 
 from app.database import Base
 
@@ -24,6 +24,7 @@ class User(Base):
         hashed_password: Хешированный пароль
         is_active: Активен ли пользователь
         is_superuser: Является ли суперпользователем
+        settings: JSON с настройками пользователя
         created_at: Дата создания
         updated_at: Дата последнего обновления
         accounts: Связанные Telegram аккаунты
@@ -62,6 +63,14 @@ class User(Base):
         Boolean,
         default=False,
         nullable=False
+    )
+
+    # Настройки пользователя (JSON)
+    settings: Mapped[Dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+        server_default='{"shareUserName": true, "shareNickname": true, "shareMessageText": true, "shareDialogTitles": true}'
     )
 
     # Временные метки

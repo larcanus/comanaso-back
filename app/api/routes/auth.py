@@ -7,9 +7,10 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models import User
 from app.schemas.auth import (
     UserRegister, UserLogin, AuthResponse, TokenVerifyResponse,
-    UserData, UserResponse, LogoutResponse, DeleteAccountResponse
+    UserData, UserResponse, LogoutResponse, DeleteAccountResponse, UserProfile, UpdateUserProfile
 )
 from app.services.auth_service import AuthService
 from app.api.dependencies import CurrentUser, get_current_user, security
@@ -332,16 +333,47 @@ async def delete_account(
 
 @router.get(
     "/me",
-    response_model=UserResponse,
-    summary="Получение информации о текущем пользователе",
-    description="Возвращает данные аутентифицированного пользователя (deprecated, используйте /verify)"
+    response_model=UserProfile,
+    summary="Получение полного профиля текущего пользователя",
 )
-async def get_current_user_info(current_user: CurrentUser) -> UserResponse:
+async def get_current_user_profile(
+    current_user: User = Depends(get_current_user)
+):
     """
-    Получение информации о текущем пользователе.
+    Получение полного профиля текущего пользователя.
 
-    Требует JWT токен в заголовке Authorization.
+    Args:
+        current_user: Текущий пользователь
 
-    **Deprecated**: Используйте `/api/auth/verify` вместо этого endpoint.
+    Returns:
+        UserProfile: Полные данные профиля включая настройки
     """
-    return UserResponse.model_validate(current_user)
+    return UserProfile.from_user(current_user)
+
+
+@router.patch(
+    "/me",
+    response_model=UserProfile,
+)
+async def update_current_user_profile(
+    update_data: UpdateUserProfile,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Обновление профиля текущего пользователя.
+
+    Args:
+        update_data: Данные для обновления (username, email, settings)
+        current_user: Текущий пользователь
+        db: Сессия базы данных
+
+    Returns:
+        UserProfile: Обновленные данные профиля
+
+    Raises:
+        HTTPException 400: Если username или email уже существуют
+        HTTPException 422: Если данные не прошли валидацию
+    """
+
+    return await AuthService.update_user_profile(db, current_user.id, update_data)
