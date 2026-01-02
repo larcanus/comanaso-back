@@ -751,8 +751,10 @@ function Test-UpdateProfilePartial {
 
     $body = @{
         settings = @{
-            theme = "light"
-            notifications_enabled = $false
+            shareUserName = $false
+            shareNickname = $true
+            shareMessageText = $false
+            shareDialogTitles = $true
         }
     } | ConvertTo-Json
 
@@ -762,7 +764,10 @@ function Test-UpdateProfilePartial {
         Show-Response $response $statusCode
 
         # Проверка обновленных настроек
-        if ($response.settings.theme -eq "light" -and $response.settings.notifications_enabled -eq $false) {
+        if ($response.settings.shareUserName -eq $false -and
+            $response.settings.shareNickname -eq $true -and
+            $response.settings.shareMessageText -eq $false -and
+            $response.settings.shareDialogTitles -eq $true) {
             Write-Success "✓ Settings updated correctly"
         } else {
             Write-Error "✗ Settings were not updated correctly"
@@ -955,7 +960,9 @@ function Test-UpdateProfileFull {
         if ($response.username -eq $newUsername -and
             $response.email -eq $newEmail -and
             $response.settings.shareUserName -eq $false -and
-            $response.settings.shareNickname -eq $true) {
+            $response.settings.shareNickname -eq $true -and
+            $response.settings.shareMessageText -eq $false -and
+            $response.settings.shareDialogTitles -eq $true) {
             Write-Success "✓ Profile data updated correctly"
             Write-Host "  Username: $($response.username)" -ForegroundColor Cyan
             Write-Host "  Email: $($response.email)" -ForegroundColor Cyan
