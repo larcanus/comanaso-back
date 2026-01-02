@@ -190,6 +190,7 @@ Request:
 {
   "username": "new_username",     // опционально, 3-100 символов
   "email": "newemail@example.com", // опционально, валидный email
+  "password": "newemail@example.com", // опционально, валидный пароль
   "settings": {                    // опционально, объект с настройками
     "shareUserName": false,
     "shareNickname": true,

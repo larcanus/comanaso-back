@@ -1016,6 +1016,84 @@ function Test-UpdateProfileFull {
     }
 }
 
+function Test-UpdatePassword {
+    Write-Info "`n=== TEST: Update Password ==="
+
+    # Создаем отдельного пользователя для теста смены пароля
+    $timestamp = Get-Date -Format "HHmmss"
+    $testLogin = "password_test_$timestamp@example.com"
+    $oldPassword = "OldPassword123"
+
+    Write-Info "Creating test user for password update..."
+    $registerBody = @{
+        login = $testLogin
+        password = $oldPassword
+    } | ConvertTo-Json
+
+    try {
+        $registerResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $registerBody
+        $token = $registerResponse.token
+        Write-Success "✓ Test user created: $testLogin"
+    }
+    catch {
+        Write-Error "✗ Failed to create test user"
+        Write-Host $_.Exception.Message
+        return
+    }
+
+    $authHeaders = $HEADERS.Clone()
+    $authHeaders["Authorization"] = "Bearer $token"
+
+    $newPassword = "NewPassword456"
+    $body = @{
+        password = $newPassword
+    } | ConvertTo-Json
+
+    try {
+        # Обновляем пароль
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/me" -Method Patch -Headers $authHeaders -Body $body -StatusCodeVariable statusCode
+        Write-Success "✓ Password updated successfully"
+        Show-Response $response $statusCode
+
+        # Пытаемся войти со старым паролем (должно не получиться)
+        Write-Info "Attempting login with old password..."
+        $oldLoginBody = @{
+            login = $testLogin
+            password = $oldPassword
+        } | ConvertTo-Json
+
+        try {
+            $oldLoginResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -Headers $HEADERS -Body $oldLoginBody
+            Write-Error "✗ Login with old password should have failed but succeeded"
+        }
+        catch {
+            Write-Success "✓ Correctly rejected old password"
+        }
+
+        # Пытаемся войти с новым паролем (должно получиться)
+        Write-Info "Attempting login with new password..."
+        $newLoginBody = @{
+            login = $testLogin
+            password = $newPassword
+        } | ConvertTo-Json
+
+        try {
+            $newLoginResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -Headers $HEADERS -Body $newLoginBody
+            Write-Success "✓ Successfully logged in with new password"
+            Write-Host "  Token: $($newLoginResponse.token.Substring(0, 20))..." -ForegroundColor Cyan
+        }
+        catch {
+            Write-Error "✗ Login with new password failed but should have succeeded"
+            Write-Host $_.Exception.Message
+        }
+
+    }
+    catch {
+        Write-Error "✗ Failed to update password"
+        Write-Host $_.Exception.Message
+    }
+}
+
 function Run-AllTests {
     Write-Host "`n╔════════════════════════════════════════╗" -ForegroundColor Yellow
     Write-Host "║   COMANASO AUTH API TESTS              ║" -ForegroundColor Yellow
@@ -1108,6 +1186,9 @@ function Run-AllTests {
 
         # Частичное обновление (только settings)
         Test-UpdateProfilePartial -Token $profileToken; Start-Sleep -Seconds 1
+
+        # Обновление пароля
+        Test-UpdatePassword -Token $profileToken -Login $profileLogin -OldPassword "Password123"; Start-Sleep -Seconds 1
 
         # Создаем второго пользователя для тестов дубликатов
         Write-Info "Creating second user for duplicate tests..."

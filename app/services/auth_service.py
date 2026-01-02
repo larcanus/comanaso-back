@@ -362,21 +362,30 @@ class AuthService:
         # Обновляем данные
         if update_data.username is not None:
             user.username = update_data.username
+            logger.info(f"Updated username for user {user_id}: {update_data.username}")
 
         if update_data.email is not None:
             user.email = update_data.email
+            logger.info(f"Updated email for user {user_id}")
+
+        if update_data.password is not None:
+            # Хешируем новый пароль
+            user.hashed_password = hash_password(update_data.password)
+            logger.info(f"Updated password for user {user_id}")
 
         if update_data.settings is not None:
             # Объединяем существующие настройки с новыми
             current_settings = user.settings or {}
             new_settings = update_data.settings.model_dump()
             user.settings = {**current_settings, **new_settings}
+            logger.info(f"Updated settings for user {user_id}")
 
         user.updated_at = datetime.utcnow()
 
         try:
             await db.commit()
             await db.refresh(user)
+            logger.info(f"Profile updated successfully for user {user_id}")
         except IntegrityError as e:
             await db.rollback()
             logger.error(f"Database error during profile update: {e}")

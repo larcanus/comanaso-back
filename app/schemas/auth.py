@@ -2,7 +2,7 @@
 Pydantic схемы для аутентификации.
 Валидация данных для регистрации, логина и токенов.
 """
-from pydantic import BaseModel, Field, validator, EmailStr
+from pydantic import BaseModel, Field, validator, EmailStr, field_validator
 from datetime import datetime
 from typing import Optional
 
@@ -194,16 +194,28 @@ class UpdateUserProfile(BaseModel):
         None,
         description="Новый email"
     )
+    password: Optional[str] = Field(
+        None,
+        min_length=6,
+        description="Новый пароль (минимум 6 символов)"
+    )
     settings: Optional[UserSettings] = Field(
         None,
         description="Новые настройки пользователя"
     )
 
     @validator("username")
-    def validate_username(cls, v):
-        """Валидация username."""
+    def validate_username(cls, v: Optional[str]) -> Optional[str]:
         if v is not None:
-            return v.lower().strip()
+            v = v.strip()
+            if len(v) < 3:
+                raise ValueError('Username должен содержать минимум 3 символа')
+        return v
+
+    @validator("password")
+    def validate_password(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) < 6:
+            raise ValueError('Пароль должен содержать минимум 6 символов')
         return v
 
     model_config = {
@@ -211,6 +223,7 @@ class UpdateUserProfile(BaseModel):
             "example": {
                 "username": "new_username",
                 "email": "newemail@example.com",
+                "password": "Password123456789",
                 "settings": {
                     "shareUserName": False,
                     "shareNickname": True,
