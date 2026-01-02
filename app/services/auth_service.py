@@ -34,55 +34,60 @@ class AuthService:
 
         Args:
             db: Асинхронная сессия базы данных
-            user_data: Данные для регистрации (login и password)
+            user_data: Данные для регистрации (login, email и password)
 
         Returns:
             AuthResponse: Токен и данные зарегистрированного пользователя
 
         Raises:
-            HTTPException: Если login уже занят
+            HTTPException: Если username или email уже заняты
         """
-        login = user_data.login.lower().strip()
-        is_email = AuthService._is_email(login)
+        username = user_data.login.lower().strip()
+        email = user_data.email.lower().strip() if user_data.email else None
 
-        logger.info(f"Attempting to register user with login: {login} (is_email: {is_email})")
+        logger.info(f"Attempting to register user with username: {username}, email: {email}")
 
-        # Проверка существования пользователя
-        if is_email:
-            stmt = select(User).where(User.email == login)
-        else:
-            stmt = select(User).where(User.username == login)
-
-        result = await db.execute(stmt)
+        # Проверка существования пользователя по username
+        stmt_username = select(User).where(User.username == username)
+        result = await db.execute(stmt_username)
         existing_user = result.scalar_one_or_none()
 
         if existing_user:
-            logger.warning(f"User with login {login} already exists")
+            logger.warning(f"User with username {username} already exists")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
-                    "error": "USER_EXISTS",
+                    "error": "USERNAME_EXISTS",
                     "message": "Пользователь с таким логином уже существует"
                 }
             )
+
+        # Проверка существования пользователя по email (если email указан)
+        if email:
+            stmt_email = select(User).where(User.email == email)
+            result = await db.execute(stmt_email)
+            existing_user = result.scalar_one_or_none()
+
+            if existing_user:
+                logger.warning(f"User with email {email} already exists")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "EMAIL_EXISTS",
+                        "message": "Пользователь с таким email уже существует"
+                    }
+                )
 
         # Хеширование пароля
         hashed_password = hash_password(user_data.password)
         logger.debug(f"Password hashed successfully")
 
         # Создание пользователя
-        if is_email:
-            new_user = User(
-                email=login,
-                username=login.split('@')[0],
-                hashed_password=hashed_password
-            )
-        else:
-            new_user = User(
-                username=login,
-                email=None,
-                hashed_password=hashed_password
-            )
+        new_user = User(
+            username=username,
+            email=email,
+            hashed_password=hashed_password
+        )
 
         try:
             db.add(new_user)
@@ -96,7 +101,7 @@ class AuthService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "error": "USER_EXISTS",
-                    "message": "Пользователь с таким логином уже существует"
+                    "message": "Пользователь с таким логином или email уже существует"
                 }
             )
 

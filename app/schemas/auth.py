@@ -52,7 +52,8 @@ class UserRegister(BaseModel):
     Схема для регистрации нового пользователя.
 
     Attributes:
-        login: Логин пользователя (email или username, 3-50 символов)
+        login: Логин пользователя (username, 3-50 символов)
+        email: Email пользователя
         password: Пароль (минимум 6 символов)
     """
 
@@ -60,7 +61,12 @@ class UserRegister(BaseModel):
         ...,
         min_length=3,
         max_length=50,
-        description="Логин пользователя (email или username)",
+        description="Логин пользователя (username)",
+        example="john_doe"
+    )
+    email: EmailStr = Field(
+        None,
+        description="Email пользователя",
         example="user@example.com"
     )
     password: str = Field(
@@ -75,6 +81,13 @@ class UserRegister(BaseModel):
     def validate_login(cls, v):
         """Валидация логина - приводим к нижнему регистру."""
         return v.lower().strip()
+
+    @validator("email")
+    def validate_email(cls, v):
+        """Валидация email - приводим к нижнему регистру."""
+        if v is not None:
+            return v.lower().strip()
+        return v
 
 
 class UserLogin(BaseModel):
@@ -115,7 +128,7 @@ class UserData(BaseModel):
     @classmethod
     def from_user(cls, user):
         """Создание из модели User."""
-        login = user.email if user.email else user.username
+        login = user.username if user.username else user.email
         return cls(
             id=user.id,
             login=login,

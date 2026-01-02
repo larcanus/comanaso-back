@@ -20,6 +20,7 @@ Content-Type: application/json
 
 Request:
 {
+  "email": "string",
   "login": "string",      // 3-50 символов
   "password": "string"    // минимум 6 символов
 }

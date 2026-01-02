@@ -410,10 +410,10 @@ function Test-DuplicateLogin {
             $null
         }
 
-        if ($errorCode -eq "USER_EXISTS") {
-            Write-Success "✓ Error code is correct (USER_EXISTS)"
+        if ($errorCode -eq "USERNAME_EXISTS") {
+            Write-Success "✓ Error code is correct (USERNAME_EXISTS)"
         } else {
-            Write-Error "✗ Expected error code USER_EXISTS, got: $errorCode"
+            Write-Error "✗ Expected error code USERNAME_EXISTS, got: $errorCode"
         }
 
         # Проверка соответствия контракту API
