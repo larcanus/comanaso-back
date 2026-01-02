@@ -39,13 +39,15 @@ function Cleanup-TestUsers {
 
 function Test-Register {
     Write-Info "`n=== TEST: Register User ==="
+    $timestamp = Get-Date -Format "HHmmss"
     $body = @{
-        login = "test@example.com"
+        login = "test_user_$timestamp@example.com"
         password = "Password123"
     } | ConvertTo-Json
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
         Write-Success "✓ Registration successful"
+        Write-Host "Created user: test_user_$timestamp@example.com" -ForegroundColor Cyan
         Show-Response $response $statusCode
         return $response
     }
@@ -57,9 +59,17 @@ function Test-Register {
 }
 
 function Test-Login {
+    param($Login = $null)
     Write-Info "`n=== TEST: Login User ==="
+
+    # Если логин не передан, используем тот же логин, что был создан последним
+    if (-not $Login) {
+        $timestamp = Get-Date -Format "HHmmss"
+        $Login = "test_user_$timestamp@example.com"
+    }
+
     $body = @{
-        login = "test@example.com"
+        login = $Login
         password = "Password123"
     } | ConvertTo-Json
     try {
@@ -361,10 +371,27 @@ function Test-InvalidLogin {
 
 function Test-DuplicateLogin {
     Write-Info "`n=== TEST: Duplicate Login ==="
+
+    # Создаем уникального пользователя
+    $timestamp = Get-Date -Format "HHmmss"
+    $testLogin = "duplicate_test_$timestamp@example.com"
+
+    # Сначала регистрируем пользователя
     $body = @{
-        login = "test@example.com"
+        login = $testLogin
         password = "Password123"
     } | ConvertTo-Json
+
+    try {
+        $firstResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
+        Write-Host "  First registration successful (id: $($firstResponse.user.id))" -ForegroundColor Cyan
+    }
+    catch {
+        Write-Error "✗ Failed to register first user for duplicate test"
+        return
+    }
+
+    # Теперь пытаемся зарегистрировать с тем же логином
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $body -StatusCodeVariable statusCode
         Write-Error "✗ Should have failed but succeeded"
@@ -375,7 +402,6 @@ function Test-DuplicateLogin {
         Write-Info "Error response:"
         $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
 
-        # Проверка структуры ошибки (может быть вложенной в detail)
         $errorCode = if ($errorDetails.detail -and $errorDetails.detail.error) {
             $errorDetails.detail.error
         } elseif ($errorDetails.error) {
@@ -1002,7 +1028,10 @@ function Run-AllTests {
     Write-Host "`n=== POSITIVE TESTS ===" -ForegroundColor Yellow
     # Основные позитивные тесты
     $user = Test-Register; Start-Sleep -Seconds 1
-    $token = Test-Login; Start-Sleep -Seconds 1
+
+    # Сохраняем логин для входа
+    $testLogin = $user.user.login
+    $token = Test-Login -Login $testLogin; Start-Sleep -Seconds 1
 
     # Тесты с валидным токеном
     if ($token) {
@@ -1044,7 +1073,8 @@ function Run-AllTests {
     # Тесты удаления учетной записи (нужно создать нового пользователя, так как предыдущий мог быть удален)
     Write-Info "Creating new user for account deletion tests..."
     $deleteTestUser = Test-Register; Start-Sleep -Seconds 1
-    $deleteToken = Test-Login; Start-Sleep -Seconds 1
+    $deleteLogin = $deleteTestUser.user.login
+    $deleteToken = Test-Login -Login $deleteLogin; Start-Sleep -Seconds 1
 
     if ($deleteToken) {
         Test-DeleteAccount -Token $deleteToken; Start-Sleep -Seconds 1
@@ -1066,7 +1096,8 @@ function Run-AllTests {
     # Создаем нового пользователя для тестов профиля
     Write-Info "Creating new user for profile tests..."
     $profileUser = Test-Register; Start-Sleep -Seconds 1
-    $profileToken = Test-Login; Start-Sleep -Seconds 1
+    $profileLogin = $profileUser.user.login
+    $profileToken = Test-Login -Login $profileLogin; Start-Sleep -Seconds 1
 
     if ($profileToken) {
         # Получение профиля
