@@ -16,15 +16,24 @@ function Show-Response {
 }
 
 function Cleanup-TestUsers {
-    Write-Info "`n=== CLEANUP: Removing test users ==="
+    Write-Host "`n=== CLEANING TEST USERS ===" -ForegroundColor Yellow
+
     try {
-        $response = Invoke-RestMethod -Uri "$BASE_URL/dev/cleanup/test-users" -Method Delete -Headers $HEADERS -StatusCodeVariable statusCode
-        Write-Success "✓ Cleanup successful"
+        $response = Invoke-RestMethod -Uri "$BASE_URL/dev/cleanup/test-users" `
+            -Method Delete `
+            -Headers $HEADERS `
+            -StatusCodeVariable statusCode `
+            -ErrorAction Stop
+
+        Write-Success "✓ $($response.message)"
+        Write-Host "  Deleted: $($response.deleted_count) user(s)" -ForegroundColor Cyan
         Show-Response $response $statusCode
     }
     catch {
-        Write-Warning "⚠ Cleanup failed (dev endpoint might be disabled or no test users found)"
-        Write-Host $_.Exception.Message
+        Write-Error "✗ Failed to clean test users: $($_.Exception.Message)"
+        if ($_.ErrorDetails.Message) {
+            Write-Host "  Response: $($_.ErrorDetails.Message)" -ForegroundColor Yellow
+        }
     }
 }
 

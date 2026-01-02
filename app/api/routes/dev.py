@@ -32,9 +32,17 @@ async def cleanup_test_users(
             detail="This endpoint is only available in development environment"
         )
 
-    # Удаляем пользователей с test в email или username
+    # Удаляем пользователей по тестовым паттернам
     stmt = delete(User).where(
-        (User.email.ilike('%tes%')) | (User.username.ilike('%tes%'))
+        (User.email.ilike('%tes%')) |
+        (User.username.ilike('%tes%')) |
+        (User.username.ilike('test_user_%')) |
+        (User.username.ilike('second_user_%')) |
+        (User.username.ilike('existing_username_%')) |
+        (User.username.ilike('updated_user_%')) |
+        (User.email.ilike('existing_%@example.com')) |
+        (User.email.ilike('updated_%@example.com')) |
+        (User.email == 'test@example.com')
     )
     
     result = await db.execute(stmt)
