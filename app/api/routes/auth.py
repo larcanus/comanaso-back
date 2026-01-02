@@ -354,12 +354,14 @@ async def get_current_user_profile(
 @router.patch(
     "/me",
     response_model=UserProfile,
+    summary="Обновление профиля пользователя",
+    description="Обновляет данные профиля текущего пользователя"
 )
-async def update_current_user_profile(
+async def update_profile(
     update_data: UpdateUserProfile,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: User = Depends(get_current_user)
-):
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)]
+) -> UserProfile:
     """
     Обновление профиля текущего пользователя.
 
