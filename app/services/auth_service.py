@@ -1,6 +1,7 @@
 import logging
 import re
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, or_, and_
@@ -12,6 +13,7 @@ from app.models.user import User
 from app.schemas.auth import (
     UserRegister, UserLogin, AuthResponse, UserData, UpdateUserProfile, UserProfile, UserSettings
 )
+from app.services.email_service import EmailService
 from app.utils.jwt import create_access_token
 from app.utils.security import hash_password, verify_password
 
@@ -385,7 +387,7 @@ class AuthService:
             user.settings = {**current_settings, **new_settings}
             logger.info(f"Updated settings for user {user_id}")
 
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc)
 
         try:
             await db.commit()
@@ -403,3 +405,154 @@ class AuthService:
             )
 
         return UserProfile.from_user(user)
+
+    @staticmethod
+    async def request_password_reset(db: AsyncSession, email: str) -> bool:
+        """
+        Запрос на сброс пароля. Генерирует токен и отправляет email.
+
+        Args:
+            db: Асинхронная сессия базы данных
+            email: Email пользователя
+
+        Returns:
+            bool: True всегда (не раскрываем существование email)
+        """
+        email = email.lower().strip()
+
+        # Ищем пользователя по email
+        stmt = select(User).where(User.email == email)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            logger.info(f"Password reset requested for non-existent email: {email}")
+            # Не раскрываем, что пользователь не существует
+            return True
+
+        if not user.is_active:
+            logger.warning(f"Password reset requested for inactive user: {email}")
+            # Не отправляем письмо неактивным пользователям
+            return True
+
+        # Генерируем уникальный токен
+        reset_token = str(uuid.uuid4())
+
+        # Устанавливаем время истечения (1 час)
+        reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        # Сохраняем токен в БД
+        user.reset_token = reset_token
+        user.reset_token_expires = reset_token_expires
+
+        try:
+            await db.commit()
+            logger.info(f"Reset token generated for user {user.id}")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to save reset token: {str(e)}")
+            return True
+
+        # Отправляем email
+        email_sent = await EmailService.send_password_reset_email(email, reset_token)
+
+        if email_sent:
+            logger.info(f"Password reset email sent to {email}")
+        else:
+            logger.error(f"Failed to send password reset email to {email}")
+
+        return True
+
+    @staticmethod
+    async def validate_reset_token(db: AsyncSession, token: str) -> User | None:
+        """
+        Проверяет валидность токена сброса пароля.
+
+        Args:
+            db: Асинхронная сессия базы данных
+            token: Токен для проверки
+
+        Returns:
+            User | None: Пользователь если токен валиден, None в противном случае
+        """
+        # Ищем пользователя по токену
+        stmt = select(User).where(User.reset_token == token)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            logger.warning(f"Invalid reset token: {token}")
+            return None
+
+        # Проверяем срок действия токена
+        if not user.reset_token_expires or user.reset_token_expires < datetime.now(timezone.utc):
+            logger.warning(f"Expired reset token for user {user.id}")
+            return None
+
+        if not user.is_active:
+            logger.warning(f"Reset token validation for inactive user {user.id}")
+            return None
+
+        logger.info(f"Valid reset token for user {user.id}")
+        return user
+
+    @staticmethod
+    async def reset_password(db: AsyncSession, token: str, new_password: str) -> bool:
+        """
+        Сбрасывает пароль пользователя по токену.
+
+        Args:
+            db: Асинхронная сессия базы данных
+            token: Токен сброса пароля
+            new_password: Новый пароль
+
+        Returns:
+            bool: True если пароль успешно изменен
+
+        Raises:
+            HTTPException: Если токен невалиден или пароль не соответствует требованиям
+        """
+        # Валидируем токен
+        user = await AuthService.validate_reset_token(db, token)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "INVALID_TOKEN",
+                    "message": "Токен недействителен или истек"
+                }
+            )
+
+        # Валидируем новый пароль
+        if len(new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "INVALID_PASSWORD",
+                    "message": "Пароль должен содержать минимум 6 символов"
+                }
+            )
+
+        # Хешируем новый пароль
+        hashed_password = hash_password(new_password)
+
+        # Обновляем пароль и удаляем токен
+        user.hashed_password = hashed_password
+        user.reset_token = None
+        user.reset_token_expires = None
+
+        try:
+            await db.commit()
+            logger.info(f"Password reset successfully for user {user.id}")
+            return True
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to reset password for user {user.id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": "RESET_FAILED",
+                    "message": "Не удалось сбросить пароль"
+                }
+            )

@@ -151,7 +151,7 @@ class UserProfile(BaseModel):
 
     id: int
     username: str
-    email: Optional[str] = None
+    email: str | None = None
     settings: UserSettings
     createdAt: str
     updatedAt: str
@@ -162,7 +162,7 @@ class UserProfile(BaseModel):
         return cls(
             id=user.id,
             username=user.username,
-            email=user.email,
+            email=user.email if user.email else None,
             settings=UserSettings(**user.settings),
             createdAt=user.created_at.isoformat() + "Z",
             updatedAt=user.updated_at.isoformat() + "Z"
@@ -197,28 +197,28 @@ class UpdateUserProfile(BaseModel):
         settings: Новые настройки (опционально)
     """
 
-    username: Optional[str] = Field(
+    username: str | None = Field(
         None,
         min_length=3,
         max_length=100,
         description="Новое имя пользователя"
     )
-    email: Optional[EmailStr] = Field(
+    email: EmailStr | None = Field(
         None,
         description="Новый email"
     )
-    password: Optional[str] = Field(
+    password: str | None = Field(
         None,
         min_length=6,
         description="Новый пароль (минимум 6 символов)"
     )
-    settings: Optional[UserSettings] = Field(
+    settings: UserSettings | None = Field(
         None,
         description="Новые настройки пользователя"
     )
 
     @validator("username")
-    def validate_username(cls, v: Optional[str]) -> Optional[str]:
+    def validate_username(cls, v: str | None) -> str | None:
         if v is not None:
             v = v.strip()
             if len(v) < 3:
@@ -226,7 +226,7 @@ class UpdateUserProfile(BaseModel):
         return v
 
     @validator("password")
-    def validate_password(cls, v: Optional[str]) -> Optional[str]:
+    def validate_password(cls, v: str | None) -> str | None:
         if v is not None and len(v) < 6:
             raise ValueError('Пароль должен содержать минимум 6 символов')
         return v
@@ -328,6 +328,85 @@ class LogoutResponse(BaseModel):
             "example": {
                 "status": "success",
                 "message": "Вы успешно вышли из системы"
+            }
+        }
+    }
+
+
+class PasswordResetRequest(BaseModel):
+    """
+    Схема запроса сброса пароля.
+
+    Attributes:
+        email: Email пользователя
+    """
+
+    email: EmailStr = Field(
+        ...,
+        description="Email пользователя для сброса пароля"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "email": "user@example.com"
+            }
+        }
+    }
+
+
+class PasswordResetConfirm(BaseModel):
+    """
+    Схема подтверждения сброса пароля.
+
+    Attributes:
+        token: Токен сброса пароля
+        new_password: Новый пароль
+    """
+
+    token: str = Field(
+        ...,
+        description="Токен сброса пароля из email"
+    )
+    new_password: str = Field(
+        ...,
+        min_length=6,
+        description="Новый пароль (минимум 6 символов)"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "token": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "new_password": "NewSecurePass123"
+            }
+        }
+    }
+
+
+class PasswordResetResponse(BaseModel):
+    """
+    Схема ответа при сбросе пароля.
+
+    Attributes:
+        status: Статус операции
+        message: Сообщение о результате
+    """
+
+    status: str = Field(
+        ...,
+        description="Статус операции"
+    )
+    message: str = Field(
+        ...,
+        description="Сообщение о результате"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "status": "success",
+                "message": "Инструкции по сбросу пароля отправлены на email"
             }
         }
     }

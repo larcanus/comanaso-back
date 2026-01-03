@@ -44,6 +44,21 @@ class Settings(BaseSettings):
     # Пути
     sessions_dir: str = Field(default="./sessions", description="Директория для сессий Telegram")
 
+    # Email Configuration (Yandex)
+    smtp_host: str = Field(default="smtp.yandex.ru", description="SMTP сервер")
+    smtp_port: int = Field(default=465, description="SMTP порт")
+    smtp_user: str = Field(..., description="SMTP пользователь (email)")
+    smtp_password: str = Field(..., description="SMTP пароль")
+    smtp_from_name: str = Field(default="Comanaso Support", description="Имя отправителя")
+    smtp_use_tls: bool = Field(default=True, description="Использовать TLS")
+
+    # Password Reset
+    password_reset_token_expire_hours: int = Field(
+        default=1,
+        description="Время жизни токена сброса пароля в часах"
+    )
+    frontend_url: str = Field(..., description="URL фронтенд приложения")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -81,25 +96,6 @@ class Settings(BaseSettings):
         if not os.path.exists(v):
             os.makedirs(v, exist_ok=True)
         return v
-
-    @field_validator("telegram_api_id", mode="before")
-    @classmethod
-    def validate_telegram_api_id(cls, v) -> Optional[int]:
-        """Валидация Telegram API ID."""
-        if v is None or v == "" or v == "0":
-            return None
-        try:
-            return int(v)
-        except (ValueError, TypeError):
-            return None
-
-    @field_validator("telegram_api_hash", mode="before")
-    @classmethod
-    def validate_telegram_api_hash(cls, v) -> Optional[str]:
-        """Валидация Telegram API Hash."""
-        if v is None or v == "":
-            return None
-        return str(v)
 
 
 # Глобальный экземпляр настроек

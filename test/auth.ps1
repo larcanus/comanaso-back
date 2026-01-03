@@ -704,6 +704,276 @@ function Test-RegisterBoundaryPassword {
 }
 
 # ============================================
+# PASSWORD RESET TESTS
+# ============================================
+
+function Test-PasswordResetRequest {
+    Write-Info "`n=== TEST: Request Password Reset ==="
+
+    # Создаем тестового пользователя для сброса пароля
+    $timestamp = Get-Date -Format "HHmmss"
+    $testEmail = "alex.rulser@gmail.com"
+    $testUsername = "reset_user_$timestamp"
+
+    $registerBody = @{
+        email = $testEmail
+        login = $testUsername
+        password = "OldPassword123"
+    } | ConvertTo-Json
+
+    try {
+        $registerResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $registerBody
+        Write-Host "  Test user created: $testEmail" -ForegroundColor Cyan
+    }
+    catch {
+        Write-Error "✗ Failed to create test user"
+        Write-Host $_.Exception.Message
+        return
+    }
+
+    # Запрос на сброс пароля
+    $body = @{
+        email = $testEmail
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/password-reset/request" `
+            -Method Post `
+            -Headers $HEADERS `
+            -Body $body `
+            -StatusCodeVariable statusCode
+
+        Write-Success "✓ Password reset email sent successfully"
+        Show-Response $response $statusCode
+
+        # В dev режиме может возвращаться токен
+        if ($response.token) {
+            Write-Info "Reset token (DEV): $($response.token)"
+            return $response.token
+        }
+
+        return $true
+    }
+    catch {
+        Write-Error "✗ Failed to send password reset email"
+        Write-Host $_.Exception.Message
+        if ($_.ErrorDetails.Message) {
+            $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+            $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+        }
+        return $null
+    }
+}
+
+function Test-PasswordResetRequestNonExistentEmail {
+    Write-Info "`n=== TEST: Request Password Reset for Non-Existent Email ==="
+
+    $body = @{
+        email = "nonexistent_$(Get-Date -Format 'HHmmss')@example.com"
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/password-reset/request" `
+            -Method Post `
+            -Headers $HEADERS `
+            -Body $body `
+            -StatusCodeVariable statusCode
+
+        Write-Success "✓ Request accepted (security: no information leak)"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Error "✗ Unexpected error for non-existent email"
+        Write-Host $_.Exception.Message
+    }
+}
+
+function Test-PasswordResetConfirm {
+    param($Token)
+    Write-Info "`n=== TEST: Confirm Password Reset with Token ==="
+
+    if (-not $Token) {
+        Write-Error "✗ No token provided"
+        return $false
+    }
+
+    $newPassword = "NewPassword456"
+    $body = @{
+        token = $Token
+        new_password = $newPassword
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/password-reset/confirm" `
+            -Method Post `
+            -Headers $HEADERS `
+            -Body $body `
+            -StatusCodeVariable statusCode
+
+        Write-Success "✓ Password reset successful"
+        Show-Response $response $statusCode
+        return $true
+    }
+    catch {
+        Write-Error "✗ Failed to reset password"
+        Write-Host $_.Exception.Message
+        if ($_.ErrorDetails.Message) {
+            $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+            $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+        }
+        return $false
+    }
+}
+
+function Test-PasswordResetInvalidToken {
+    Write-Info "`n=== TEST: Password Reset with Invalid Token ==="
+
+    $body = @{
+        token = "invalid_token_12345"
+        new_password = "NewPassword456"
+    } | ConvertTo-Json
+
+    try {
+        $response = Invoke-RestMethod -Uri "$BASE_URL/auth/password-reset/confirm" `
+            -Method Post `
+            -Headers $HEADERS `
+            -Body $body `
+            -StatusCodeVariable statusCode
+
+        Write-Error "✗ Should have failed but succeeded"
+        Show-Response $response $statusCode
+    }
+    catch {
+        Write-Success "✓ Correctly rejected invalid token"
+        $errorDetails = $_.ErrorDetails.Message | ConvertFrom-Json
+        Write-Info "Error response:"
+        $errorDetails | ConvertTo-Json -Depth 10 | Write-Host
+
+        $errorCode = if ($errorDetails.detail -and $errorDetails.detail.error) {
+            $errorDetails.detail.error
+        } elseif ($errorDetails.error) {
+            $errorDetails.error
+        } else {
+            $null
+        }
+
+        if ($errorCode -eq "INVALID_TOKEN") {
+            Write-Success "✓ Error code is correct (INVALID_TOKEN)"
+        } else {
+            Write-Error "✗ Expected error code INVALID_TOKEN, got: $errorCode"
+        }
+    }
+}
+
+function Test-PasswordResetFullFlow {
+    Write-Info "`n=== TEST: Full Password Reset Flow ==="
+
+    # Шаг 1: Создание пользователя
+    $timestamp = Get-Date -Format "HHmmss"
+    $testEmail = "fullflow_test_$timestamp@example.com"
+    $testUsername = "fullflow_user_$timestamp"
+    $oldPassword = "OldPassword123"
+
+    Write-Info "Step 1: Creating test user..."
+    $registerBody = @{
+        email = $testEmail
+        login = $testUsername
+        password = $oldPassword
+    } | ConvertTo-Json
+
+    try {
+        $registerResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -Headers $HEADERS -Body $registerBody
+        Write-Success "✓ User created: $testEmail"
+    }
+    catch {
+        Write-Error "✗ Failed to create user"
+        Write-Host $_.Exception.Message
+        return
+    }
+
+    # Шаг 2: Запрос на сброс пароля
+    Write-Info "Step 2: Requesting password reset..."
+    $resetRequestBody = @{
+        email = $testEmail
+    } | ConvertTo-Json
+
+    try {
+        $resetResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/password-reset/request" `
+            -Method Post `
+            -Headers $HEADERS `
+            -Body $resetRequestBody
+
+        Write-Success "✓ Reset request sent"
+
+        if (-not $resetResponse.token) {
+            Write-Warning "⚠ Token not returned (production mode). Cannot complete full flow test."
+            return
+        }
+
+        $resetToken = $resetResponse.token
+        Write-Info "Reset token received: $($resetToken.Substring(0, 20))..."
+
+    }
+    catch {
+        Write-Error "✗ Failed to request password reset"
+        return
+    }
+
+    # Шаг 3: Подтверждение сброса пароля
+    Write-Info "Step 3: Confirming password reset..."
+    $newPassword = "NewPassword456"
+    $confirmBody = @{
+        token = $resetToken
+        new_password = $newPassword
+    } | ConvertTo-Json
+
+    try {
+        $confirmResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/password-reset/confirm" `
+            -Method Post `
+            -Headers $HEADERS `
+            -Body $confirmBody
+
+        Write-Success "✓ Password reset confirmed"
+    }
+    catch {
+        Write-Error "✗ Failed to confirm password reset"
+        return
+    }
+
+    # Шаг 4: Попытка входа со старым паролем (должна провалиться)
+    Write-Info "Step 4: Testing login with OLD password (should fail)..."
+    $oldLoginBody = @{
+        login = $testEmail
+        password = $oldPassword
+    } | ConvertTo-Json
+
+    try {
+        $oldLoginResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -Headers $HEADERS -Body $oldLoginBody
+        Write-Error "✗ Login with old password should have failed but succeeded"
+    }
+    catch {
+        Write-Success "✓ Correctly rejected old password"
+    }
+
+    # Шаг 5: Вход с новым паролем (должен успешно пройти)
+    Write-Info "Step 5: Testing login with NEW password (should succeed)..."
+    $newLoginBody = @{
+        login = $testEmail
+        password = $newPassword
+    } | ConvertTo-Json
+
+    try {
+        $newLoginResponse = Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -Headers $HEADERS -Body $newLoginBody
+        Write-Success "✓ Successfully logged in with new password"
+        Write-Success "✓✓✓ FULL PASSWORD RESET FLOW COMPLETED SUCCESSFULLY ✓✓✓"
+    }
+    catch {
+        Write-Error "✗ Failed to login with new password"
+        Write-Host $_.Exception.Message
+    }
+}
+
+# ============================================
 # PROFILE MANAGEMENT TESTS
 # ============================================
 
@@ -1165,6 +1435,13 @@ function Run-AllTests {
     Test-DuplicateLogin; Start-Sleep -Seconds 1
     Test-InvalidJSON; Start-Sleep -Seconds 1
 
+    Write-Host "`n=== PASSWORD RESET TESTS ===" -ForegroundColor Yellow
+    # Тесты восстановления пароля
+    Test-PasswordResetRequest; Start-Sleep -Seconds 1
+    Test-PasswordResetRequestNonExistentEmail; Start-Sleep -Seconds 1
+    Test-PasswordResetInvalidToken; Start-Sleep -Seconds 1
+    Test-PasswordResetFullFlow; Start-Sleep -Seconds 1
+
     Write-Host "`n=== BOUNDARY TESTS ===" -ForegroundColor Yellow
     # Граничные значения (должны пройти)
     Test-RegisterBoundaryLogin; Start-Sleep -Seconds 1
@@ -1339,6 +1616,14 @@ if ($args.Count -eq 0) {
             }
             "35" { if (-not $token) { $token = Read-Host "Enter token" }; Test-UpdateProfileInvalidData -Token $token }
             "36" { Test-UpdateProfileInvalidToken }
+            "37" { Test-PasswordResetRequest }
+            "38" { Test-PasswordResetRequestNonExistentEmail }
+            "39" {
+                $token = Read-Host "Enter reset token"
+                Test-PasswordResetConfirm -Token $token
+            }
+            "40" { Test-PasswordResetInvalidToken }
+            "41" { Test-PasswordResetFullFlow }
             "0" { Write-Host "Exiting..." }
             default { Write-Host "Invalid option" -ForegroundColor Red }
         }

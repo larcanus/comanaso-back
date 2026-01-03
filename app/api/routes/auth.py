@@ -10,7 +10,9 @@ from app.database import get_db
 from app.models import User
 from app.schemas.auth import (
     UserRegister, UserLogin, AuthResponse, TokenVerifyResponse,
-    UserData, UserResponse, LogoutResponse, DeleteAccountResponse, UserProfile, UpdateUserProfile
+    UserData, UserResponse, LogoutResponse, DeleteAccountResponse,
+    UserProfile, UpdateUserProfile, PasswordResetRequest,
+    PasswordResetConfirm, PasswordResetResponse
 )
 from app.services.auth_service import AuthService
 from app.api.dependencies import CurrentUser, get_current_user, security
@@ -379,3 +381,103 @@ async def update_profile(
     """
 
     return await AuthService.update_user_profile(db, current_user.id, update_data)
+
+@router.post(
+    "/password-reset/request",
+    response_model=PasswordResetResponse,
+    summary="Запрос на сброс пароля",
+    description="Отправляет email с инструкциями по сбросу пароля",
+    responses={
+        200: {
+            "description": "Инструкции отправлены на email",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "success",
+                        "message": "Инструкции по сбросу пароля отправлены на email"
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Email не найден",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "EMAIL_NOT_FOUND",
+                        "message": "Пользователь с таким email не найден"
+                    }
+                }
+            }
+        }
+    }
+)
+async def request_password_reset(
+    reset_request: PasswordResetRequest,
+    db: Annotated[AsyncSession, Depends(get_db)]
+) -> PasswordResetResponse:
+    """
+    Запрос на сброс пароля.
+
+    Отправляет email с ссылкой для сброса пароля.
+    - **email**: Email пользователя
+    """
+    await AuthService.request_password_reset(db, reset_request.email)
+
+    return PasswordResetResponse(
+        status="success",
+        message="Инструкции по сбросу пароля отправлены на email"
+    )
+
+
+@router.post(
+    "/password-reset/confirm",
+    response_model=PasswordResetResponse,
+    summary="Подтверждение сброса пароля",
+    description="Устанавливает новый пароль используя токен из email",
+    responses={
+        200: {
+            "description": "Пароль успешно изменен",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "success",
+                        "message": "Пароль успешно изменен"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Невалидный или истекший токен",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "INVALID_RESET_TOKEN",
+                        "message": "Токен сброса пароля недействителен или истек"
+                    }
+                }
+            }
+        }
+    }
+)
+async def confirm_password_reset(
+    reset_confirm: PasswordResetConfirm,
+    db: Annotated[AsyncSession, Depends(get_db)]
+) -> PasswordResetResponse:
+    """
+    Подтверждение сброса пароля.
+
+    Устанавливает новый пароль используя токен из email.
+    - **token**: Токен из email
+    - **new_password**: Новый пароль (минимум 6 символов)
+    """
+    await AuthService.reset_password(
+        db,
+        reset_confirm.token,
+        reset_confirm.new_password
+    )
+
+    return PasswordResetResponse(
+        status="success",
+        message="Пароль успешно изменен"
+    )
