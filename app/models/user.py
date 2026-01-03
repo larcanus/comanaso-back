@@ -25,6 +25,8 @@ class User(Base):
         is_active: Активен ли пользователь
         is_superuser: Является ли суперпользователем
         settings: JSON с настройками пользователя
+        reset_token: Токен для сброса пароля
+        reset_token_expires: Время истечения токена сброса
         created_at: Дата создания
         updated_at: Дата последнего обновления
         accounts: Связанные Telegram аккаунты
@@ -71,6 +73,19 @@ class User(Base):
         nullable=False,
         default=dict,
         server_default='{"shareUserName": true, "shareNickname": true, "shareMessageText": true, "shareDialogTitles": true}'
+    )
+
+    # Сброс пароля
+    reset_token: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+        comment="Токен для сброса пароля"
+    )
+    reset_token_expires: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Время истечения токена сброса пароля"
     )
 
     # Временные метки
