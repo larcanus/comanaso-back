@@ -12,12 +12,12 @@ from app.schemas.auth import (
     UserRegister, UserLogin, AuthResponse, TokenVerifyResponse,
     UserData, UserResponse, LogoutResponse, DeleteAccountResponse,
     UserProfile, UpdateUserProfile, PasswordResetRequest,
-    PasswordResetConfirm, PasswordResetResponse
+    PasswordResetConfirm, PasswordResetResponse,
+    PasswordResetValidateRequest, PasswordResetValidateResponse
 )
 from app.services.auth_service import AuthService
 from app.api.dependencies import CurrentUser, get_current_user, security
 from app.services.email_service import EmailService
-
 
 router = APIRouter(tags=["Authentication"])
 
@@ -69,8 +69,8 @@ router = APIRouter(tags=["Authentication"])
     }
 )
 async def register(
-    user_data: UserRegister,
-    db: Annotated[AsyncSession, Depends(get_db)]
+        user_data: UserRegister,
+        db: Annotated[AsyncSession, Depends(get_db)]
 ) -> AuthResponse:
     """
     Регистрация нового пользователя.
@@ -116,8 +116,8 @@ async def register(
     }
 )
 async def login(
-    credentials: UserLogin,
-    db: Annotated[AsyncSession, Depends(get_db)]
+        credentials: UserLogin,
+        db: Annotated[AsyncSession, Depends(get_db)]
 ) -> AuthResponse:
     """
     Авторизация пользователя.
@@ -165,8 +165,8 @@ async def login(
     }
 )
 async def verify_token(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+        db: Annotated[AsyncSession, Depends(get_db)]
 ) -> TokenVerifyResponse:
     """
     Проверка валидности JWT токена.
@@ -300,9 +300,9 @@ async def logout(current_user: CurrentUser) -> LogoutResponse:
     }
 )
 async def delete_account(
-    current_user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    request: Request
+        current_user: CurrentUser,
+        db: Annotated[AsyncSession, Depends(get_db)],
+        request: Request
 ) -> DeleteAccountResponse:
     """
     Полное удаление учетной записи текущего пользователя.
@@ -340,7 +340,7 @@ async def delete_account(
     summary="Получение полного профиля текущего пользователя",
 )
 async def get_current_user_profile(
-    current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user)
 ):
     """
     Получение полного профиля текущего пользователя.
@@ -361,9 +361,9 @@ async def get_current_user_profile(
     description="Обновляет данные профиля текущего пользователя"
 )
 async def update_profile(
-    update_data: UpdateUserProfile,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+        update_data: UpdateUserProfile,
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Annotated[AsyncSession, Depends(get_db)]
 ) -> UserProfile:
     """
     Обновление профиля текущего пользователя.
@@ -382,6 +382,7 @@ async def update_profile(
     """
 
     return await AuthService.update_user_profile(db, current_user.id, update_data)
+
 
 @router.post(
     "/password-reset/request",
@@ -414,9 +415,9 @@ async def update_profile(
     }
 )
 async def request_password_reset(
-    request: PasswordResetRequest,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db)
+        request: PasswordResetRequest,
+        background_tasks: BackgroundTasks,
+        db: AsyncSession = Depends(get_db)
 ):
     """
     Запрос на сброс пароля.
@@ -468,8 +469,8 @@ async def request_password_reset(
     }
 )
 async def confirm_password_reset(
-    reset_confirm: PasswordResetConfirm,
-    db: Annotated[AsyncSession, Depends(get_db)]
+        reset_confirm: PasswordResetConfirm,
+        db: Annotated[AsyncSession, Depends(get_db)]
 ) -> PasswordResetResponse:
     """
     Подтверждение сброса пароля.
@@ -487,4 +488,58 @@ async def confirm_password_reset(
     return PasswordResetResponse(
         status="success",
         message="Пароль успешно изменен"
+    )
+
+
+@router.post(
+    "/password-reset/validate",
+    response_model=PasswordResetValidateResponse,
+    summary="Валидация токена сброса пароля",
+    description="Проверяет валидность токена перед сменой пароля",
+    responses={
+        200: {
+            "description": "Токен валиден",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "valid": True,
+                        "email": "user@example.com"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Токен невалиден",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "valid": False,
+                        "email": None
+                    }
+                }
+            }
+        }
+    }
+)
+async def validate_password_reset_token(
+        validate_request: PasswordResetValidateRequest,
+        db: Annotated[AsyncSession, Depends(get_db)]
+) -> PasswordResetValidateResponse:
+    """
+    Валидация токена сброса пароля.
+
+    Проверяет существование токена и срок действия перед сменой пароля.
+    - **token**: Токен из email
+    """
+    user = await AuthService.validate_reset_token(db, validate_request.token)
+
+    if user:
+        return PasswordResetValidateResponse(
+            valid=True,
+            email=user.email
+        )
+
+    return PasswordResetValidateResponse(
+        valid=False,
+        email=None
     )

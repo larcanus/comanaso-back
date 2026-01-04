@@ -99,7 +99,7 @@ class EmailService:
     @staticmethod
     async def send_password_reset_email(to_email: str, reset_token: str) -> bool:
         """
-        Отправляет email со ссылкой для сброса пароля.
+        Отправляет email со ссылкой для сброса пароля с повторными попытками.
 
         Args:
             to_email: Email получателя
@@ -108,59 +108,76 @@ class EmailService:
         Returns:
             bool: True если письмо отправлено успешно, False в противном случае
         """
-        try:
-            from email.utils import formatdate, make_msgid
+        import asyncio
+        from email.utils import formatdate, make_msgid
 
-            # Формируем URL для сброса пароля
-            reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
+        max_retries = 3
+        retry_delay = 2  # секунды между попытками
 
-            # Создаем сообщение
-            message = MIMEMultipart("alternative")
-            message["Subject"] = "Сброс пароля - Comanaso"
-            message["From"] = f"{settings.smtp_from_name} <{settings.smtp_user}>"
-            message["To"] = to_email
-            message["Reply-To"] = settings.smtp_user
-            message["Date"] = formatdate(localtime=True)
-            message["Message-ID"] = make_msgid(domain=settings.smtp_user.split("@")[1])
-            message["X-Mailer"] = "Comanaso Password Reset Service"
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Формируем URL для сброса пароля
+                reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
 
-            logger.info(f"Preparing password reset email for {to_email}")
-            logger.info(f"Reset URL: {reset_url}")
+                # Создаем сообщение
+                message = MIMEMultipart("alternative")
+                message["Subject"] = "Сброс пароля - Comanaso"
+                message["From"] = f"{settings.smtp_from_name} <{settings.smtp_user}>"
+                message["To"] = to_email
+                message["Reply-To"] = settings.smtp_user
+                message["Date"] = formatdate(localtime=True)
+                message["Message-ID"] = make_msgid(domain=settings.smtp_user.split("@")[1])
+                message["X-Mailer"] = "Comanaso Password Reset Service"
 
-            # Добавляем текстовую и HTML версии
-            text_part = MIMEText(
-                EmailService._create_reset_password_text(reset_url), 
-                "plain", 
-                "utf-8"
-            )
-            html_part = MIMEText(
-                EmailService._create_reset_password_html(reset_url), 
-                "html", 
-                "utf-8"
-            )
+                logger.info(f"Preparing password reset email for {to_email} (attempt {attempt}/{max_retries})")
+                logger.info(f"Reset URL: {reset_url}")
 
-            message.attach(text_part)
-            message.attach(html_part)
+                # Добавляем текстовую и HTML версии
+                text_part = MIMEText(
+                    EmailService._create_reset_password_text(reset_url),
+                    "plain",
+                    "utf-8"
+                )
+                html_part = MIMEText(
+                    EmailService._create_reset_password_html(reset_url),
+                    "html",
+                    "utf-8"
+                )
 
-            # Подключаемся к SMTP серверу асинхронно
-            logger.info(f"Connecting to SMTP: {settings.smtp_host}:{settings.smtp_port}")
+                message.attach(text_part)
+                message.attach(html_part)
 
-            await aiosmtplib.send(
-                message,
-                hostname=settings.smtp_host,
-                port=settings.smtp_port,
-                username=settings.smtp_user,
-                password=settings.smtp_password,
-                use_tls=True,
-                timeout=30
-            )
+                # Подключаемся к SMTP серверу асинхронно
+                logger.info(f"Connecting to SMTP: {settings.smtp_host}:{settings.smtp_port}")
 
-            logger.info(f"Password reset email sent successfully to {to_email}")
-            return True
+                await aiosmtplib.send(
+                    message,
+                    hostname=settings.smtp_host,
+                    port=settings.smtp_port,
+                    username=settings.smtp_user,
+                    password=settings.smtp_password,
+                    use_tls=True,
+                    timeout=60  # Увеличен таймаут до 60 секунд
+                )
 
-        except aiosmtplib.SMTPException as e:
-            logger.error(f"SMTP error sending password reset email to {to_email}: {str(e)}")
-            return False
-        except Exception as e:
-            logger.error(f"Failed to send password reset email to {to_email}: {str(e)}")
-            return False
+                logger.info(f"Password reset email sent successfully to {to_email}")
+                return True
+
+            except aiosmtplib.SMTPException as e:
+                logger.error(f"SMTP error sending password reset email to {to_email} (attempt {attempt}/{max_retries}): {str(e)}")
+                if attempt < max_retries:
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(f"All {max_retries} attempts failed for {to_email}")
+                    return False
+            except Exception as e:
+                logger.error(f"Failed to send password reset email to {to_email} (attempt {attempt}/{max_retries}): {str(e)}")
+                if attempt < max_retries:
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(f"All {max_retries} attempts failed for {to_email}")
+                    return False
+
+        return False

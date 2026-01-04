@@ -412,6 +412,56 @@ class PasswordResetResponse(BaseModel):
     }
 
 
+class PasswordResetValidateRequest(BaseModel):
+    """
+    Схема запроса валидации токена сброса пароля.
+
+    Attributes:
+        token: Токен сброса пароля
+    """
+
+    token: str = Field(
+        ...,
+        description="Токен сброса пароля из email"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "token": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            }
+        }
+    }
+
+
+class PasswordResetValidateResponse(BaseModel):
+    """
+    Схема ответа валидации токена сброса пароля.
+
+    Attributes:
+        valid: Валидность токена
+        email: Email пользователя (если токен валиден)
+    """
+
+    valid: bool = Field(
+        ...,
+        description="Валидность токена"
+    )
+    email: str | None = Field(
+        None,
+        description="Email пользователя"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "valid": True,
+                "email": "user@example.com"
+            }
+        }
+    }
+
+
 class ErrorResponse(BaseModel):
     """
     Стандартная схема ошибки.

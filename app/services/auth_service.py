@@ -457,38 +457,42 @@ class AuthService:
     @staticmethod
     async def validate_reset_token(db: AsyncSession, token: str) -> User | None:
         """
-        Проверяет валидность токена сброса пароля.
+        Валидация токена сброса пароля.
 
         Args:
             db: Асинхронная сессия базы данных
-            token: Токен для проверки
+            token: Токен сброса пароля
 
         Returns:
-            User | None: Пользователь если токен валиден, None в противном случае
+            User: Пользователь если токен валиден, иначе None
         """
-        # Ищем пользователя по токену
-        stmt = select(User).where(User.reset_token == token)
-        result = await db.execute(stmt)
-        user = result.scalar_one_or_none()
+        try:
+            # Поиск пользователя с данным токеном
+            result = await db.execute(
+                select(User).where(
+                    User.reset_token == token,
+                    User.reset_token_expires > datetime.now(timezone.utc)
+                )
+            )
+            user = result.scalar_one_or_none()
 
-        if not user:
-            logger.warning(f"Invalid reset token: {token}")
+            if not user:
+                logger.warning(f"Invalid or expired reset token: {token[:8]}...")
+                return None
+
+            logger.info(f"Valid reset token for user {user.id}")
+            return user
+
+        except Exception as e:
+            logger.error(f"Error validating reset token: {str(e)}")
             return None
-
-        # Проверяем срок действия токена
-        if not user.reset_token_expires or user.reset_token_expires < datetime.now(timezone.utc):
-            logger.warning(f"Expired reset token for user {user.id}")
-            return None
-
-        if not user.is_active:
-            logger.warning(f"Reset token validation for inactive user {user.id}")
-            return None
-
-        logger.info(f"Valid reset token for user {user.id}")
-        return user
 
     @staticmethod
-    async def reset_password(db: AsyncSession, token: str, new_password: str) -> bool:
+    async def reset_password(
+        db: AsyncSession,
+        token: str,
+        new_password: str
+    ) -> None:
         """
         Сбрасывает пароль пользователя по токену.
 
@@ -498,7 +502,7 @@ class AuthService:
             new_password: Новый пароль
 
         Returns:
-            bool: True если пароль успешно изменен
+            None: Удаляется токен и обновляется пароль
 
         Raises:
             HTTPException: Если токен невалиден или пароль не соответствует требованиям
@@ -536,7 +540,6 @@ class AuthService:
         try:
             await db.commit()
             logger.info(f"Password reset successfully for user {user.id}")
-            return True
         except Exception as e:
             await db.rollback()
             logger.error(f"Failed to reset password for user {user.id}: {str(e)}")

@@ -35,13 +35,13 @@
 │    ✓ Проверка существования пользователя            │
 │    ✓ Генерация случайного токена (UUID)             │
 │    ✓ Сохранение токена в БД с временем истечения    │
-│    ✓ Отправка email через Яндекс.Почту              │
+│    ✓ Отправка email            │
 │    ✓ Возврат успешного ответа                       │
 └──────────────────────┬──────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────┐
-│ 3. Email письмо на Яндекс.Почту                     │
+│ 3. Email письмо                 │
 │    Тема: "Сброс пароля - Comanaso"                  │
 │    Тело:                                             │
 │    "Для сброса пароля перейдите по ссылке:          │
@@ -122,16 +122,6 @@
 ---
 
 ## 🛠 Этапы разработки
-
-### **ЭТАП 1: Настройка Яндекс.Почты**
-
-#### 1.1. Создание аккаунта для приложения
-1. Регистрируем email: `noreply@comanaso.com` (или используем существующий)
-2. Переходим в настройки Яндекс.Почты
-3. Создаем **App Password** (пароль приложения)
-   - Настройки → Безопасность → Пароли приложений
-   - Генерируем пароль для SMTP
-
 #### 1.2. Получаем реквизиты
 ```
 SMTP_HOST: smtp.yandex.ru
@@ -151,58 +141,6 @@ SMTP_FROM_NAME=Comanaso Support
 SMTP_USE_TLS=true
 PASSWORD_RESET_TOKEN_EXPIRE_HOURS=1
 FRONTEND_URL=https://comanaso.com
-```
-
----
-
-### **ЭТАП 2: Backend - Обновление модели User**
-
-#### 2.1. Добавляем поля в модель
-**Файл:** `models/user.py` (или где находится модель User)
-
-Добавить поля:
-```python
-reset_token: Optional[str] = None
-reset_token_expires: Optional[datetime] = None
-```
-
-#### 2.2. Создаем миграцию Alembic
-```bash
-# В контейнере или локально
-alembic revision --autogenerate -m "Add password reset fields to User"
-alembic upgrade head
-```
-
-**Ожидаемая миграция:**
-```python
-def upgrade():
-    op.add_column('users', sa.Column('reset_token', sa.String(length=255), nullable=True))
-    op.add_column('users', sa.Column('reset_token_expires', sa.DateTime(), nullable=True))
-    op.create_index('idx_reset_token', 'users', ['reset_token'])
-
-def downgrade():
-    op.drop_index('idx_reset_token', 'users')
-    op.drop_column('users', 'reset_token_expires')
-    op.drop_column('users', 'reset_token')
-```
-
----
-
-### **ЭТАП 3: Backend - Email сервис**
-
-#### 3.1. Создаем `services/email_service.py`
-
-**Функционал:**
-- Класс `EmailService`
-- Метод `send_password_reset_email(to_email: str, reset_token: str)`
-- HTML шаблон письма
-- Подключение к Яндекс SMTP
-
-**Зависимости (если нужны новые):**
-```bash
-pip install aiosmtplib
-# или
-pip install python-multipart email-validator
 ```
 
 ---
@@ -372,51 +310,6 @@ Response (400):
 
 ---
 
-### **ЭТАП 8: Frontend - Интеграция в Login**
-
-#### 8.1. Обновить `LoginPage.tsx`
-
-**Добавить ссылку:**
-```tsx
-<form>
-  {/* ... существующие поля ... */}
-  
-  <div className="forgot-password-link">
-    <Link to="/forgot-password">
-      Забыли пароль?
-    </Link>
-  </div>
-  
-  <button type="submit">Войти</button>
-</form>
-```
-
----
-
-## 📝 Схема БД (изменения)
-
-### Таблица `users`
-
-```sql
--- Новые колонки
-ALTER TABLE users ADD COLUMN reset_token VARCHAR(255) NULL;
-ALTER TABLE users ADD COLUMN reset_token_expires TIMESTAMP NULL;
-
--- Индекс для быстрого поиска по токену
-CREATE INDEX idx_reset_token ON users(reset_token);
-```
-
-**Пример записи:**
-```
-id: 1
-email: user@example.com
-password_hash: $2b$12$...
-reset_token: a7f3c9e1-4b2d-47a8-9c3e-f1d8b6a4e5c2
-reset_token_expires: 2025-01-15 15:30:00
-```
-
----
-
 ## 🔒 Безопасность
 
 ### ✅ Реализованные меры:
@@ -568,26 +461,6 @@ def test_reset_password_invalid_token():
 def test_rate_limiting():
     """Проверка ограничения частоты запросов"""
     # После 3 запросов должен вернуть 429
-```
-
-### Frontend тесты:
-
-**Файл:** `tests/ForgotPassword.test.tsx`
-
-```typescript
-describe('ForgotPasswordPage', () => {
-  it('должен отправить email при валидном вводе', () => {});
-  it('должен показать ошибку при невалидном email', () => {});
-  it('должен показать уведомление после отправки', () => {});
-});
-
-describe('ResetPasswordPage', () => {
-  it('должен валидировать токен при загрузке', () => {});
-  it('должен показать форму при валидном токене', () => {});
-  it('должен показать ошибку при истекшем токене', () => {});
-  it('должен валидировать совпадение паролей', () => {});
-  it('должен отправить новый пароль', () => {});
-});
 ```
 
 ### Ручное тестирование:
