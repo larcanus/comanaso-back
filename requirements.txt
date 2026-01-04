@@ -25,3 +25,6 @@ cryptg==0.4.0
 # Утилиты
 python-dotenv==1.0.1
 colorlog>=6.8.0
+
+# Почта
+aiosmtplib==5.0.0

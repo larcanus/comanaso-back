@@ -2,6 +2,7 @@ import logging
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any, Coroutine
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, or_, and_
@@ -13,7 +14,6 @@ from app.models.user import User
 from app.schemas.auth import (
     UserRegister, UserLogin, AuthResponse, UserData, UpdateUserProfile, UserProfile, UserSettings
 )
-from app.services.email_service import EmailService
 from app.utils.jwt import create_access_token
 from app.utils.security import hash_password, verify_password
 
@@ -407,7 +407,7 @@ class AuthService:
         return UserProfile.from_user(user)
 
     @staticmethod
-    async def request_password_reset(db: AsyncSession, email: str) -> bool:
+    async def request_password_reset(db: AsyncSession, email: str) -> bool | str | None:
         """
         Запрос на сброс пароля. Генерирует токен и отправляет email.
 
@@ -448,20 +448,11 @@ class AuthService:
         try:
             await db.commit()
             logger.info(f"Reset token generated for user {user.id}")
+            return reset_token
         except Exception as e:
             await db.rollback()
             logger.error(f"Failed to save reset token: {str(e)}")
-            return True
-
-        # Отправляем email
-        email_sent = await EmailService.send_password_reset_email(email, reset_token)
-
-        if email_sent:
-            logger.info(f"Password reset email sent to {email}")
-        else:
-            logger.error(f"Failed to send password reset email to {email}")
-
-        return True
+            return None
 
     @staticmethod
     async def validate_reset_token(db: AsyncSession, token: str) -> User | None:

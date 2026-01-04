@@ -2,7 +2,7 @@
 API роутер для управления авторизацией юзеров.
 """
 from typing import Annotated
-from fastapi import APIRouter, Depends, status, HTTPException, Request
+from fastapi import APIRouter, Depends, status, HTTPException, Request, BackgroundTasks
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ from app.schemas.auth import (
 )
 from app.services.auth_service import AuthService
 from app.api.dependencies import CurrentUser, get_current_user, security
+from app.services.email_service import EmailService
 
 
 router = APIRouter(tags=["Authentication"])
@@ -413,20 +414,26 @@ async def update_profile(
     }
 )
 async def request_password_reset(
-    reset_request: PasswordResetRequest,
-    db: Annotated[AsyncSession, Depends(get_db)]
-) -> PasswordResetResponse:
+    request: PasswordResetRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
     """
     Запрос на сброс пароля.
-
-    Отправляет email с ссылкой для сброса пароля.
-    - **email**: Email пользователя
+    Отправляет email с инструкциями если пользователь существует.
     """
-    await AuthService.request_password_reset(db, reset_request.email)
+    reset_token = await AuthService.request_password_reset(db, request.email)
+
+    if reset_token:
+        background_tasks.add_task(
+            EmailService.send_password_reset_email,
+            request.email,
+            reset_token
+        )
 
     return PasswordResetResponse(
         status="success",
-        message="Инструкции по сбросу пароля отправлены на email"
+        message="Инструкции по сбросу пароля отправлены на email если он существует"
     )
 
 

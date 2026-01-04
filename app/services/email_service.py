@@ -3,7 +3,7 @@
 Использует Яндекс SMTP для отправки писем.
 """
 import logging
-import smtplib
+import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -142,16 +142,23 @@ class EmailService:
             message.attach(text_part)
             message.attach(html_part)
 
-            # Подключаемся к SMTP серверу
-            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as server:
-                server.set_debuglevel(0)  # Отключаем debug для production
-                server.login(settings.smtp_user, settings.smtp_password)
-                server.send_message(message)
+            # Подключаемся к SMTP серверу асинхронно
+            logger.info(f"Connecting to SMTP: {settings.smtp_host}:{settings.smtp_port}")
+
+            await aiosmtplib.send(
+                message,
+                hostname=settings.smtp_host,
+                port=settings.smtp_port,
+                username=settings.smtp_user,
+                password=settings.smtp_password,
+                use_tls=True,
+                timeout=30
+            )
 
             logger.info(f"Password reset email sent successfully to {to_email}")
             return True
 
-        except smtplib.SMTPException as e:
+        except aiosmtplib.SMTPException as e:
             logger.error(f"SMTP error sending password reset email to {to_email}: {str(e)}")
             return False
         except Exception as e:
