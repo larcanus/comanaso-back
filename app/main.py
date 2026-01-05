@@ -372,8 +372,6 @@ async def health_check():
 # Подключение роутеров
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(accounts.router, prefix="/api/accounts")
-
-# Подключаем telegram роуты под общим префиксом /api
 app.include_router(telegram.router, prefix="/api")
 
 # Dev endpoints (только для development окружения)

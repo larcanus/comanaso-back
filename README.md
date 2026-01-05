@@ -51,6 +51,98 @@
 
 ---
 
+## Проверка работоспособности
+
+### Через консоль браузера
+
+Откройте консоль разработчика (F12) и выполните:
+
+```javascript
+// Базовая проверка
+fetch('http://localhost:8000/health')
+  .then(res => res.json())
+  .then(data => console.log('Health Status:', data))
+  .catch(err => console.error('Error:', err));
+
+// Расширенная проверка с деталями
+fetch('http://localhost:8000/health')
+  .then(async res => {
+    const data = await res.json();
+    console.log('✅ Status:', data.status);
+    console.log('📊 Version:', data.version);
+    console.log('🗄️ Database:', data.database);
+    console.log('🌍 Environment:', data.environment);
+    return data;
+  })
+  .catch(err => console.error('❌ API недоступен:', err));
+
+// Проверка с async/await
+(async () => {
+  try {
+    const response = await fetch('http://localhost:8000/health');
+    const health = await response.json();
+    
+    if (health.status === 'healthy' && health.database === 'healthy') {
+      console.log('✅ Все системы работают нормально');
+    } else {
+      console.warn('⚠️ Обнаружены проблемы:', health);
+    }
+  } catch (error) {
+    console.error('❌ Не удалось подключиться к API:', error);
+  }
+})();
+```
+
+## Через командную строку (CLI)
+```shell
+# Простая проверка с curl
+curl http://localhost:8000/health
+
+# Форматированный вывод с jq
+curl -s http://localhost:8000/health | jq
+
+# Проверка с выводом HTTP заголовков
+curl -i http://localhost:8000/health
+
+# Проверка только статус-кода
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health
+
+# Проверка с таймаутом
+curl --max-time 5 http://localhost:8000/health
+
+# Проверка production endpoint (через HTTPS)
+curl https://api.comanaso.com/health
+
+# Непрерывный мониторинг (каждые 5 секунд)
+watch -n 5 'curl -s http://localhost:8000/health | jq'
+
+# Проверка с сохранением в файл
+curl -s http://localhost:8000/health | jq > health-check.json
+```
+
+## Интерпретация ответа
+```
+Здоровый статус:
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "environment": "development",
+  "database": "healthy",
+  "debug": true
+}
+```
+```
+Деградированный статус (проблемы с БД):
+{
+  "status": "degraded",
+  "version": "1.0.0",
+  "environment": "production",
+  "database": "unhealthy",
+  "debug": false
+}
+```
+
+
 ## Полезные команды
 
 ### Docker
