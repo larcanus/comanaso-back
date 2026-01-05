@@ -1,13 +1,6 @@
-## README с планом реализации
-
-Создаю подробный план разработки системы сброса пароля с использованием Яндекс.Почты.
-
-```
 # Система сброса пароля через токен
 
-## 📋 Описание
-
-Реализация безопасной системы восстановления пароля с использованием одноразовых токенов и email-уведомлений через Яндекс.Почту.
+Реализация безопасной системы восстановления пароля с использованием одноразовых токенов и email-уведомлений.
 
 ---
 
@@ -83,20 +76,20 @@
 │ 6A. Показать форму   │ │ 6B. Показать ошибку  │
 │     смены пароля:    │ │     "Ссылка          │
 │                      │ │      недействительна │
-│ [Новый пароль    ]  │ │      или истекла"    │
-│ [Повторите пароль]  │ │                      │
-│ [Сменить пароль  ]  │ │ [Запросить новую]   │
+│ [Новый пароль    ]   │ │      или истекла"    │
+│ [Повторите пароль]   │ │                      │
+│ [Сменить пароль  ]   │ │ [Запросить новую]    │
 └──────────┬───────────┘ └──────────────────────┘
            │
            ▼
 ┌─────────────────────────────────────────────────────┐
 │ 7. Пользователь вводит новый пароль                 │
 │    POST /api/auth/reset-password                    │
-│    Body: {                                           │
+│    Body: {                                          │
 │      "token": "a7f3c9e1...",                        │
 │      "new_password": "NewSecure123!"                │
-│    }                                                 │
-│                                                      │
+│    }                                                │
+│                                                     │
 │    Backend действия:                                │
 │    ✓ Повторная проверка токена                      │
 │    ✓ Хеширование нового пароля                      │
@@ -118,320 +111,11 @@
 │    POST /api/auth/login                             │
 └─────────────────────────────────────────────────────┘
 ```
-
----
-
-## 🛠 Этапы разработки
-#### 1.2. Получаем реквизиты
-```
-SMTP_HOST: smtp.yandex.ru
-SMTP_PORT: 465 (SSL) или 587 (STARTTLS)
-SMTP_USER: noreply@comanaso.com
-SMTP_PASSWORD: <app-password>
-
-
-#### 1.3. Добавляем в `.env`
-```env
-# Email Configuration (Yandex)
-SMTP_HOST=smtp.yandex.ru
-SMTP_PORT=465
-SMTP_USER=noreply@comanaso.com
-SMTP_PASSWORD=your_app_password_here
-SMTP_FROM_NAME=Comanaso Support
-SMTP_USE_TLS=true
-PASSWORD_RESET_TOKEN_EXPIRE_HOURS=1
-FRONTEND_URL=https://comanaso.com
-```
-
----
-
-### **ЭТАП 4: Backend - Обновление Auth сервиса**
-
-#### 4.1. Обновляем `services/auth_service.py`
-
-**Новые методы:**
-1. `request_password_reset(email: str) -> bool`
-   - Поиск пользователя по email
-   - Генерация UUID токена
-   - Сохранение токена с временем истечения
-   - Вызов email_service для отправки письма
-
-2. `validate_reset_token(token: str) -> Optional[User]`
-   - Проверка существования токена
-   - Проверка срока действия
-   - Возврат пользователя или None
-
-3. `reset_password(token: str, new_password: str) -> bool`
-   - Валидация токена
-   - Хеширование нового пароля
-   - Обновление пароля
-   - Удаление/инвалидация токена
-
----
-
-### **ЭТАП 5: Backend - API Endpoints**
-
-#### 5.1. Создаем/обновляем `routers/auth.py`
-
-**Новые эндпоинты:**
-
-**1. POST `/api/auth/request-password-reset`**
-```python
-Request Body:
-{
-  "email": "user@example.com"
-}
-
-Response (200):
-{
-  "message": "Если пользователь существует, письмо отправлено"
-}
-
-Response (429 - Rate Limit):
-{
-  "detail": "Слишком много запросов. Попробуйте через 5 минут"
-}
-```
-
-**2. GET `/api/auth/validate-reset-token`**
-```python
-Query Params: ?token=a7f3c9e1...
-
-Response (200):
-{
-  "valid": true,
-  "email": "user@example.com"
-}
-
-Response (404):
-{
-  "detail": "Токен недействителен или истек"
-}
-```
-
-**3. POST `/api/auth/reset-password`**
-```python
-Request Body:
-{
-  "token": "a7f3c9e1...",
-  "new_password": "NewSecure123!"
-}
-
-Response (200):
-{
-  "message": "Пароль успешно изменен"
-}
-
-Response (400):
-{
-  "detail": "Токен недействителен или пароль не соответствует требованиям"
-}
-```
-
-#### 5.2. Добавить Rate Limiting
-- Защита от спама: максимум 3 запроса в час с одного IP
-- Использовать `slowapi` или аналог
-
----
-
-### **ЭТАП 6: Frontend - Страница "Забыли пароль?"**
-
-#### 6.1. Создать компонент `ForgotPasswordPage.tsx`
-
-**Путь:** `/forgot-password`
-
-**Функционал:**
-- Форма с полем email
-- Валидация email
-- Отправка POST запроса на `/api/auth/request-password-reset`
-- Показ уведомления: "Если пользователь существует, письмо отправлено"
-- Ссылка "Вернуться к входу"
-
-**UI элементы:**
-```
-┌─────────────────────────────────────┐
-│          Забыли пароль?             │
-│                                     │
-│  Введите ваш email, и мы отправим   │
-│  инструкции для восстановления      │
-│                                     │
-│  Email: [________________]          │
-│                                     │
-│  [  Отправить инструкции  ]        │
-│                                     │
-│  ← Вернуться к входу                │
-└─────────────────────────────────────┘
-```
-
----
-
-### **ЭТАП 7: Frontend - Страница сброса пароля**
-
-#### 7.1. Создать компонент `ResetPasswordPage.tsx`
-
-**Путь:** `/reset-password?token=...`
-
-**Функционал:**
-1. **useEffect при монтировании:**
-   - Извлечь token из URL
-   - GET `/api/auth/validate-reset-token?token=...`
-   - Если валиден → показать форму
-   - Если нет → показать ошибку
-
-2. **Форма смены пароля:**
-   - Поле "Новый пароль" (type=password)
-   - Поле "Повторите пароль"
-   - Валидация совпадения паролей
-   - Показ требований к паролю
-   - Отправка POST `/api/auth/reset-password`
-
-3. **Успешное изменение:**
-   - Показать уведомление
-   - Кнопка "Перейти к входу" → redirect на `/login`
-
-**UI элементы:**
-```
-┌─────────────────────────────────────┐
-│        Создайте новый пароль        │
-│                                     │
-│  Новый пароль:                      │
-│  [________________] 👁               │
-│                                     │
-│  Повторите пароль:                  │
-│  [________________] 👁               │
-│                                     │
-│  ✓ Минимум 8 символов               │
-│  ✓ Одна заглавная буква             │
-│  ✓ Одна цифра                       │
-│                                     │
-│  [    Сменить пароль    ]          │
-└─────────────────────────────────────┘
-```
-
----
-
-## 🔒 Безопасность
-
-### ✅ Реализованные меры:
-
-1. **Случайные токены**
-   - UUID v4 (128 бит энтропии)
-   - Невозможно угадать
-
-2. **Время жизни токена**
-   - 1 час (настраивается)
-   - Автоматическая инвалидация
-
-3. **Одноразовое использование**
-   - После смены пароля токен удаляется
-
-4. **Rate Limiting**
-   - Максимум 3 запроса в час
-   - Защита от спама
-
-5. **Не раскрываем существование пользователя**
-   - Всегда возвращаем "Письмо отправлено"
-   - Даже если email не найден
-
-6. **HTTPS обязателен**
-   - Токен передается через защищенное соединение
-
-7. **Безопасное хранение паролей**
-   - Bcrypt хеширование
-   - Минимум 12 раундов
-
----
-
-## 📧 Шаблон Email письма
-
-### HTML версия:
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Сброс пароля</title>
-</head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background-color: #f8f9fa; padding: 30px; border-radius: 10px;">
-    <h2 style="color: #333; margin-top: 0;">Сброс пароля</h2>
-    
-    <p style="color: #666; font-size: 16px;">
-      Вы запросили сброс пароля для вашего аккаунта на <strong>Comanaso</strong>.
-    </p>
-    
-    <div style="background-color: #fff; padding: 20px; border-radius: 5px; margin: 20px 0;">
-      <p style="margin: 0; color: #333;">
-        Для создания нового пароля нажмите на кнопку ниже:
-      </p>
-      
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="{reset_url}" 
-           style="background-color: #007bff; color: white; padding: 12px 30px; 
-                  text-decoration: none; border-radius: 5px; display: inline-block;
-                  font-weight: bold;">
-          Сбросить пароль
-        </a>
-      </div>
-      
-      <p style="color: #666; font-size: 14px; margin-top: 20px;">
-        Или скопируйте эту ссылку в браузер:
-      </p>
-      <p style="color: #007bff; word-break: break-all; font-size: 14px;">
-        {reset_url}
-      </p>
-    </div>
-    
-    <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; 
-                border-left: 4px solid #ffc107;">
-      <p style="margin: 0; color: #856404; font-size: 14px;">
-        <strong>⚠️ Важно:</strong> Ссылка действительна в течение <strong>1 часа</strong>.
-      </p>
-    </div>
-    
-    <p style="color: #666; font-size: 14px; margin-top: 30px;">
-      Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.
-      Ваш пароль останется без изменений.
-    </p>
-    
-    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-    
-    <p style="color: #999; font-size: 12px; text-align: center;">
-      © 2025 Comanaso. Все права защищены.<br>
-      Это автоматическое письмо, не отвечайте на него.
-    </p>
-  </div>
-</body>
-</html>
-```
-
-### Text версия (fallback):
-
-```
-Сброс пароля - Comanaso
-
-Вы запросили сброс пароля для вашего аккаунта.
-
-Для создания нового пароля перейдите по ссылке:
-{reset_url}
-
-⚠️ Важно: Ссылка действительна в течение 1 часа.
-
-Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.
-
----
-© 2025 Comanaso
-Это автоматическое письмо, не отвечайте на него.
-```
-
 ---
 
 ## 🧪 Тестирование
 
 ### Backend тесты:
-
-**Файл:** `tests/test_password_reset.py`
 
 ```python
 def test_request_password_reset_existing_user():
@@ -468,7 +152,7 @@ def test_rate_limiting():
 **Чеклист:**
 - [ ] Запрос сброса для существующего email
 - [ ] Запрос сброса для несуществующего email (должен выглядеть так же)
-- [ ] Получение письма на Яндекс.Почту
+- [ ] Получение письма на популярные почтовые сервисы
 - [ ] Переход по ссылке из письма
 - [ ] Валидация токена
 - [ ] Смена пароля с совпадающими полями
@@ -480,131 +164,17 @@ def test_rate_limiting():
 
 ---
 
-## 📦 Checklist развертывания
-
-### Backend:
-
-- [ ] Добавлены SMTP настройки в `.env`
-- [ ] Создан App Password в Яндекс.Почте
-- [ ] Запущена миграция БД
-- [ ] Создан `services/email_service.py`
-- [ ] Обновлен `services/auth_service.py`
-- [ ] Созданы эндпоинты в `routers/auth.py`
-- [ ] Добавлен Rate Limiting
-- [ ] Написаны тесты
-- [ ] Проверена отправка email в staging
-
-### Frontend:
-
-- [ ] Создан `ForgotPasswordPage.tsx`
-- [ ] Создан `ResetPasswordPage.tsx`
-- [ ] Добавлен роутинг для новых страниц
-- [ ] Обновлен `LoginPage.tsx` со ссылкой
-- [ ] Добавлены стили для форм
-- [ ] Написаны тесты
-- [ ] Проверена работа в staging
-
-### DevOps:
-
-- [ ] Обновлен `.env` в Docker контейнере
-- [ ] Проверен SMTP доступ с сервера (порты 465/587)
-- [ ] Настроен FRONTEND_URL в environment
-- [ ] Добавлен мониторинг отправки email
-- [ ] Настроены алерты на ошибки отправки
-
----
-
-## 🚀 Запуск в production
-
-### 1. Проверка окружения
-```bash
-# Проверить настройки SMTP
-echo $SMTP_HOST
-echo $SMTP_USER
-
-# Проверить доступность SMTP порта
-telnet smtp.yandex.ru 465
-```
-
-### 2. Миграция БД
-```bash
-docker-compose exec backend alembic upgrade head
-```
-
-### 3. Тестовая отправка email
+### Тестовая отправка email
 ```bash
 # Через API или напрямую из Python
-curl -X POST http://localhost:8000/api/auth/request-password-reset \
+curl -X POST http://localhost:8000/api/auth/password-reset/request \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com"}'
 ```
 
-### 4. Мониторинг логов
-```bash
-docker-compose logs -f backend | grep -i email
-```
-
----
-
-## 📊 Метрики и мониторинг
-
-### Что отслеживать:
-
-1. **Email отправка:**
-   - Количество отправленных писем / час
-   - Процент неудачных отправок
-   - Время доставки
-
-2. **Использование токенов:**
-   - Количество сгенерированных токенов
-   - Количество использованных токенов
-   - Процент истекших токенов
-
-3. **Rate limiting:**
-   - Количество заблокированных IP
-   - Частота срабатывания лимитов
-
-4. **Ошибки:**
-   - SMTP ошибки
-   - Недействительные токены
-   - Таймауты
-
----
-
-## 🐛 Возможные проблемы и решения
-
-### Проблема 1: Письма не доходят
-**Решение:**
-- Проверить App Password в Яндексе
-- Проверить порты 465/587 на сервере
-- Проверить логи SMTP
-- Попробовать другой порт (587 вместо 465)
-
-### Проблема 2: Письма попадают в спам
-**Решение:**
-- Настроить SPF, DKIM, DMARC записи
-- Использовать корпоративный домен для отправки
-- Добавить unsubscribe ссылку
-
-### Проблема 3: Токены не валидируются
-**Решение:**
-- Проверить timezone на сервере и в БД
-- Убедиться что время истечения сохраняется в UTC
-- Проверить корректность SQL запроса
-
-### Проблема 4: Rate limiting блокирует легитимных пользователей
-**Решение:**
-- Увеличить лимит (5 вместо 3)
-- Использовать whitelist для доверенных IP
-- Добавить капчу
-
----
 
 ## 📚 Полезные ссылки
 
-- [Яндекс.Почта SMTP настройки](https://yandex.ru/support/mail/mail-clients/others.html)
 - [FastAPI Email Best Practices](https://fastapi.tiangolo.com/)
 - [OWASP Password Reset Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html)
-- [Alembic Migrations Guide](https://alembic.sqlalchemy.org/en/latest/tutorial.html)
 
----
