@@ -4,7 +4,7 @@
 
 ---
 
-## 🔄 Общий Flow
+## Общий Flow
 
 ```
 ┌──────────────┐
@@ -173,7 +173,7 @@ curl -X POST http://localhost:8000/api/auth/password-reset/request \
 ```
 
 
-## 📚 Полезные ссылки
+## Полезные ссылки
 
 - [FastAPI Email Best Practices](https://fastapi.tiangolo.com/)
 - [OWASP Password Reset Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html)
