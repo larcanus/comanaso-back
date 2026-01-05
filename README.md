@@ -1,74 +1,79 @@
 # Comanaso Backend
 
-Python FastAPI backend для управления Telegram аккаунтами.
+Главный репозиторий бэкенда Comanaso. Проект реализован на Python с использованием FastAPI и интегрируется с Telegram через Telethon, обеспечивая аутентификацию на основе JWT.
 
-## Требования
+---
 
-- Docker 20.10+
-- Docker Compose 2.0+
-- PostgreSQL 15+ (через Docker)
+## Основные возможности
+
+- REST API для регистрации, входа и управления профилем пользователя.
+- Интеграция с Telegram для работы с аккаунтами и диалогами.
+- Управление состоянием пользователя и настройками приватности.
+- Поддержка миграций базы данных с помощью Alembic.
+
+---
+
+## Технологический стек
+
+- **Язык:** Python
+- **фреймворк:** FastAPI
+- **Библиотека Telegram:** Telethon (v1.42.0)
+- **База данных:** PostgreSQL
+- **Миграции:** Alembic
+- **Аутентификация:** JWT (Bearer Token)
+
+---
 
 ## Быстрый старт
 
-### 1. Клонирование репозитория
+1. Убедитесь, что установлены Docker и Docker Compose.
+2. Скопируйте файл окружения и заполните необходимые переменные.
+   ```bash
+   cp .env.example .env
+   ```
+3. Запустите сервисы:
+   ```bash
+   docker-compose up --build
+   ```
+4. После запуска API доступно по адресу `http://localhost:8000`.
+
+---
+
+## Документация
+
+| Раздел                                 | Описание                                                                                             |
+|----------------------------------------|------------------------------------------------------------------------------------------------------|
+| [API & Контракты](README_API.md)       | Подробные спецификации REST API: аутентификация, работа с Telegram-диалогами, описание кодов ошибок. |
+| [База данных и миграции](README_DB.md) | Инструкции по подключению к PostgreSQL, управлению миграциями Alembic и полезные SQL-команды.        |
+| [Reset PSW Flow](README_PSW.md)        | Краткий обзор продуктового процесса и бизнес-логики сброса пароля.                                   |
+
+> Совет: начните с раздела об API, чтобы понять, как взаимодействовать с сервисом, затем изучите миграции и продуктовый flow при необходимости.
+
+---
+
+## Полезные команды
+
+### Docker
 
 ```bash
-git clone <repository-url>
-cd comanaso-back
+# Запуск сервисов
+docker-compose up -d --build
 
+# Остановка сервисов
+docker-compose down
+
+# Просмотр логов
+docker-compose logs -f
 ```
 
-## 6. BACKEND IMPLEMENTATION HINTS
+### Alembic
 
-### 6.1 Структура проекта
+Подробности смотрите в [README_DB.md](README_DB.md), но базовые команды приведены ниже:
 
-```
-backend/
-├── test/
-│   ├── accounts.ps1
-│   └── auth.ps1
-├── alembic/
-│   ├── versions/
-│   ├── script.py.mako
-│   └── env.py                      # Alembic environment configuration. Настройка окружения для миграций базы данных.
-├── app/
-│   ├── main.py                     # FastAPI app. Настройка приложения, middleware, роутеров и lifecycle events.
-│   ├── config.py                   # Настройки
-│   ├── database.py                 # SQLAlchemy setup
-│   ├── models/
-│   │   ├── user.py                 # SQLAlchemy модель пользователя. Хранит данные о пользователях системы.
-│   │   └── account.py              # SQLAlchemy модель Telegram аккаунта. Хранит данные о подключенных Telegram аккаунтах.
-│   ├── schemas/
-│   │   ├── auth.py                 # Pydantic схемы для аутентификации. Валидация данных для регистрации, логина и токенов.
-│   │   ├── telegram.py             # Pydantic схемы для Telegram операций. Валидация данных для работы с Telegram API.
-│   │   └── account.py              # Pydantic схемы для работы с Telegram аккаунтами.
-│   ├── services/
-│   │   ├── auth_service.py         # Сервис для работы с аутентификацией пользователей
-│   │   ├── account_service.py      # Сервис для управления Telegram аккаунтами. Бизнес-логика CRUD операций с аккаунтами.
-│   │   └── telegram_service.py     # файла нет - какая-то логика с телетон
-│   ├── utils/
-│   │   ├── jwt.py                  # Утилиты для работы с JWT токенами.
-│   │   ├── security.py             # Утилиты для работы с паролями.
-│   │   └── telethon_client.py      # файла нет - какая-то логика с телетон
-│   └── api/
-│         ├──  dependencies.py      # FastAPI dependencies для аутентификации и авторизации. Кастомный HTTPBearer с правильным форматом ошибок.
-│         └──  routers/
-│               ├── auth.py         # API роутер для управления аутентификацией пользователей.
-│               ├── accounts.py     # API роутер для управления Telegram аккаунтами. CRUD операции с аккаунтами пользователя.
-│               ├── dev.py          # Development/Testing endpoints. Используются только в dev окружении для тестирования.
-│               └── telegram.py     # файла нет - какая-то логика с телетон
-├── requirements.txt                # FastAPI и веб-сервер (пакеты)
-└── .env
-```
+```bash
+# Создание новой миграции
+docker-compose exec comanaso-api alembic revision --autogenerate -m "Описание изменений"
 
-### 6.2 Основные зависимости
-
-```txt:requirements.txt
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-telethon==1.42.0
-sqlalchemy==2.0.36
-pydantic==2.10.3
-alembic==1.14.1
-aiosmtplib==5.0.0
+# Применение миграций
+docker-compose exec comanaso-api alembic upgrade head
 ```
