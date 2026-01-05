@@ -211,32 +211,7 @@ class TelegramService:
         except FloodWait as e:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": e.seconds}
-            )
-        except TelethonManagerError as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={"error": "TELETHON_ERROR", "message": str(e)}
-            )
-        except InvalidCode:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "INVALID_CODE", "message": "Неверный код подтверждения"}
-            )
-        except ExpiredCodeError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "EXPIRED_CODE", "message": "Код истек, запросите новый"}
-            )
-        except FloodWait as e:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": getattr(e, "seconds", None)}
-            )
-        except NotConnected:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "NOT_CONNECTED", "message": "Клиент не создан"}
             )
         except TelethonManagerError as e:
             raise HTTPException(
@@ -285,7 +260,7 @@ class TelegramService:
         except FloodWait as e:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": e.seconds}
+                detail={"error": "FLOOD_WAIT", "message": "Flood wait", "seconds": getattr(e, "seconds", None)}
             )
         except TelethonManagerError as e:
             raise HTTPException(
@@ -392,7 +367,6 @@ class TelegramService:
         # В любом случае очищаем session_string и помечаем как отключенный
         account.session_string = None
         account.is_connected = False
-        from datetime import datetime, timezone
         account.last_activity = datetime.now(timezone.utc)
         db.add(account)
         await db.commit()
