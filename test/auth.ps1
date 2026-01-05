@@ -712,7 +712,7 @@ function Test-PasswordResetRequest {
 
     # Создаем тестового пользователя для сброса пароля
     $timestamp = Get-Date -Format "HHmmss"
-    $testEmail = "alex.rulser@gmail.com"
+    $testEmail = "test_$timestamp@example.com"
     $testUsername = "reset_user_$timestamp"
 
     $registerBody = @{
