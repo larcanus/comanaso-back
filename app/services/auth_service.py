@@ -219,9 +219,9 @@ class AuthService:
 
     @staticmethod
     async def delete_user_account(
-        db: AsyncSession,
-        user_id: int,
-        telethon_manager = None
+            db: AsyncSession,
+            user_id: int,
+            telethon_manager=None
     ) -> dict:
         """
         Полное удаление учетной записи пользователя и всех связанных данных.
@@ -294,9 +294,9 @@ class AuthService:
 
     @staticmethod
     async def update_user_profile(
-        db: AsyncSession,
-        user_id: int,
-        update_data: UpdateUserProfile
+            db: AsyncSession,
+            user_id: int,
+            update_data: UpdateUserProfile
     ) -> UserProfile:
         """
         Обновление профиля пользователя.
@@ -489,9 +489,9 @@ class AuthService:
 
     @staticmethod
     async def reset_password(
-        db: AsyncSession,
-        token: str,
-        new_password: str
+            db: AsyncSession,
+            token: str,
+            new_password: str
     ) -> None:
         """
         Сбрасывает пароль пользователя по токену.

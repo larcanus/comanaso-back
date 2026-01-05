@@ -23,6 +23,7 @@ from app.utils.telethon_client import TelethonManager
 # Импорт роутеров
 from app.api.routes import auth, accounts, dev, telegram
 
+
 # Настройка цветного логирования с эмодзи
 def setup_logging():
     """Настройка логирования с цветами и эмодзи."""
@@ -81,6 +82,7 @@ def setup_logging():
     # Настройка для uvicorn
     logging.getLogger('uvicorn.access').setLevel(logging.WARNING)
     logging.getLogger('uvicorn.error').setLevel(logging.INFO)
+
 
 # Инициализируем логирование
 setup_logging()
@@ -379,9 +381,9 @@ if settings.environment == "development":
     app.include_router(dev.router, prefix="/api/dev")
     logger.info("🔧 Development endpoints enabled at /api/dev")
 
-
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

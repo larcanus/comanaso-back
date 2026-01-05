@@ -20,7 +20,7 @@ router = APIRouter(tags=["Development"])
     description="Удаляет всех пользователей с email/username содержащим 'test'. Только для dev окружения."
 )
 async def cleanup_test_users(
-    db: Annotated[AsyncSession, Depends(get_db)]
+        db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Удаляет всех тестовых пользователей из базы данных.
@@ -44,12 +44,12 @@ async def cleanup_test_users(
         (User.email.ilike('updated_%@example.com')) |
         (User.email == 'test@example.com')
     )
-    
+
     result = await db.execute(stmt)
     await db.commit()
-    
+
     deleted_count = result.rowcount
-    
+
     return {
         "message": f"Deleted {deleted_count} test user(s)",
         "deleted_count": deleted_count
@@ -62,8 +62,8 @@ async def cleanup_test_users(
     description="Удаляет конкретного пользователя. Только для dev окружения."
 )
 async def delete_user_by_id(
-    user_id: int,
-    db: Annotated[AsyncSession, Depends(get_db)]
+        user_id: int,
+        db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Удаляет пользователя по ID.
@@ -79,17 +79,17 @@ async def delete_user_by_id(
     stmt = select(User).where(User.id == user_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with id {user_id} not found"
         )
-    
+
     # Удаляем пользователя
     await db.delete(user)
     await db.commit()
-    
+
     return {
         "message": f"User {user_id} deleted successfully",
         "user_id": user_id,
@@ -103,7 +103,7 @@ async def delete_user_by_id(
     description="Возвращает список всех пользователей. Только для dev окружения."
 )
 async def list_all_users(
-    db: Annotated[AsyncSession, Depends(get_db)]
+        db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Возвращает список всех пользователей в системе.
@@ -118,7 +118,7 @@ async def list_all_users(
     stmt = select(User)
     result = await db.execute(stmt)
     users = result.scalars().all()
-    
+
     return {
         "total": len(users),
         "users": [

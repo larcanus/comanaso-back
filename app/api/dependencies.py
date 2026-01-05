@@ -46,8 +46,8 @@ security = CustomHTTPBearer()
 
 
 async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+        db: Annotated[AsyncSession, Depends(get_db)]
 ) -> User:
     """
     Получение текущего аутентифицированного пользователя из JWT токена.
@@ -91,10 +91,11 @@ async def get_current_user(
 
     return user
 
+
 async def get_account(
-    account_id: int = Path(..., description="ID аккаунта"),
-    db: AsyncSession = Depends(get_db),
-    current_user: Any = Depends(get_current_user),
+        account_id: int = Path(..., description="ID аккаунта"),
+        db: AsyncSession = Depends(get_db),
+        current_user: Any = Depends(get_current_user),
 ) -> Account:
     """
     Dependency: возвращает Account по account_id из path и проверяет, что он принадлежит current_user.
@@ -130,10 +131,12 @@ def get_telethon_manager(request: Request) -> TelethonManager:
         request.app.state.telethon_manager = tm
     return tm
 
+
 def get_telegram_service(db: AsyncSession = Depends(get_db)) -> TelegramService:
     """Dependency для получения TelegramService"""
     tm = TelethonManager()
     return TelegramService(tm)
+
 
 # Типизированная зависимость для удобства
 CurrentUser = Annotated[User, Depends(get_current_user)]

@@ -28,9 +28,9 @@ class AccountService:
 
     @staticmethod
     async def create_account(
-        db: AsyncSession,
-        user_id: int,
-        account_data: AccountCreate
+            db: AsyncSession,
+            user_id: int,
+            account_data: AccountCreate
     ) -> Account:
         """
         Создание нового Telegram аккаунта.
@@ -93,9 +93,9 @@ class AccountService:
 
     @staticmethod
     async def get_account(
-        db: AsyncSession,
-        account_id: int,
-        user_id: int
+            db: AsyncSession,
+            account_id: int,
+            user_id: int
     ) -> Account:
         """
         Получение аккаунта по ID с проверкой владельца.
@@ -132,10 +132,10 @@ class AccountService:
 
     @staticmethod
     async def get_user_accounts(
-        db: AsyncSession,
-        user_id: int,
-        skip: int = 0,
-        limit: int = 100
+            db: AsyncSession,
+            user_id: int,
+            skip: int = 0,
+            limit: int = 100
     ) -> List[Account]:
         """
         Получение всех аккаунтов пользователя с пагинацией.
@@ -159,10 +159,10 @@ class AccountService:
 
     @staticmethod
     async def update_account(
-        db: AsyncSession,
-        account_id: int,
-        user_id: int,
-        account_data: AccountUpdate
+            db: AsyncSession,
+            account_id: int,
+            user_id: int,
+            account_data: AccountUpdate
     ) -> Account:
         """
         Обновление данных аккаунта.
@@ -225,9 +225,9 @@ class AccountService:
 
     @staticmethod
     async def delete_account(
-        db: AsyncSession,
-        account_id: int,
-        user_id: int
+            db: AsyncSession,
+            account_id: int,
+            user_id: int
     ) -> None:
         """
         Удаление аккаунта.
@@ -247,9 +247,9 @@ class AccountService:
 
     @staticmethod
     async def update_connection_status(
-        db: AsyncSession,
-        account_id: int,
-        is_connected: bool
+            db: AsyncSession,
+            account_id: int,
+            is_connected: bool
     ) -> Account:
         """
         Обновление статуса подключения аккаунта.
@@ -285,9 +285,9 @@ class AccountService:
 
     @staticmethod
     async def update_session(
-        db: AsyncSession,
-        account_id: int,
-        session_string: str
+            db: AsyncSession,
+            account_id: int,
+            session_string: str
     ) -> Account:
         """
         Обновление session_string аккаунта после авторизации.
@@ -324,9 +324,9 @@ class AccountService:
 
     @staticmethod
     async def get_account_by_phone(
-        db: AsyncSession,
-        phone: str,
-        user_id: int | None = None
+            db: AsyncSession,
+            phone: str,
+            user_id: int | None = None
     ) -> Account | None:
         """
         Получение аккаунта по номеру телефона.

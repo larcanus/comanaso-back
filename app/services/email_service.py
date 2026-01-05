@@ -7,7 +7,6 @@ import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -327,7 +326,8 @@ class EmailService:
                 return True
 
             except aiosmtplib.SMTPException as e:
-                logger.error(f"SMTP error sending password reset email to {to_email} (attempt {attempt}/{max_retries}): {str(e)}")
+                logger.error(
+                    f"SMTP error sending password reset email to {to_email} (attempt {attempt}/{max_retries}): {str(e)}")
                 if attempt < max_retries:
                     logger.info(f"Retrying in {retry_delay} seconds...")
                     await asyncio.sleep(retry_delay)
@@ -335,7 +335,8 @@ class EmailService:
                     logger.error(f"All {max_retries} attempts failed for {to_email}")
                     return False
             except Exception as e:
-                logger.error(f"Failed to send password reset email to {to_email} (attempt {attempt}/{max_retries}): {str(e)}")
+                logger.error(
+                    f"Failed to send password reset email to {to_email} (attempt {attempt}/{max_retries}): {str(e)}")
                 if attempt < max_retries:
                     logger.info(f"Retrying in {retry_delay} seconds...")
                     await asyncio.sleep(retry_delay)

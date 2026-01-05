@@ -28,9 +28,9 @@ router = APIRouter(
     summary="Создать новый Telegram аккаунт"
 )
 async def create_account(
-    account_data: AccountCreate,
-    current_user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)]
+        account_data: AccountCreate,
+        current_user: CurrentUser,
+        db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Создание нового Telegram аккаунта.
@@ -56,10 +56,10 @@ async def create_account(
     summary="Получить список всех аккаунтов"
 )
 async def get_accounts(
-    skip: int = 0,
-    limit: int = 100,
-    current_user: CurrentUser = None,
-    db: Annotated[AsyncSession, Depends(get_db)] = None
+        skip: int = 0,
+        limit: int = 100,
+        current_user: CurrentUser = None,
+        db: Annotated[AsyncSession, Depends(get_db)] = None
 ):
     """
     Получение списка всех Telegram аккаунтов текущего пользователя.
@@ -86,9 +86,9 @@ async def get_accounts(
     summary="Получить аккаунт по ID"
 )
 async def get_account(
-    account_id: int,
-    current_user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)]
+        account_id: int,
+        current_user: CurrentUser,
+        db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Получение детальной информации о Telegram аккаунте.
@@ -112,10 +112,10 @@ async def get_account(
     summary="Обновить данные аккаунта"
 )
 async def update_account(
-    account_id: int,
-    account_data: AccountUpdate,
-    current_user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)]
+        account_id: int,
+        account_data: AccountUpdate,
+        current_user: CurrentUser,
+        db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Обновление данных Telegram аккаунта.
@@ -144,9 +144,9 @@ async def update_account(
     summary="Удалить аккаунт"
 )
 async def delete_account(
-    account_id: int,
-    current_user: CurrentUser,
-    db: Annotated[AsyncSession, Depends(get_db)]
+        account_id: int,
+        current_user: CurrentUser,
+        db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """
     Удаление Telegram аккаунта.

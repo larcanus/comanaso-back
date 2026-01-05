@@ -147,11 +147,11 @@ class TelegramService:
             )
 
     async def verify_code(
-        self,
-        db: AsyncSession,
-        user_id: int,
-        account_id: int,
-        code: str
+            self,
+            db: AsyncSession,
+            user_id: int,
+            account_id: int,
+            code: str
     ) -> Dict[str, Any]:
         """
         Подтверждение кода: sign_in_code -> при success сохраняем session_string и ставим online.
@@ -218,14 +218,6 @@ class TelegramService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={"error": "TELETHON_ERROR", "message": str(e)}
             )
-
-            response = {
-                "status": "password_required",
-                "message": "Требуется 2FA пароль"
-            }
-            if password_hint:
-                response["passwordHint"] = password_hint
-            return response
         except InvalidCode:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -253,11 +245,11 @@ class TelegramService:
             )
 
     async def verify_password(
-        self,
-        db: AsyncSession,
-        user_id: int,
-        account_id: int,
-        password: str
+            self,
+            db: AsyncSession,
+            user_id: int,
+            account_id: int,
+            password: str
     ) -> Dict[str, Any]:
         """
         Завершение 2FA паролем.
@@ -514,13 +506,13 @@ class TelegramService:
             )
 
     async def get_dialogs_extended(
-        self,
-        db: AsyncSession,
-        user_id: int,
-        account_id: int,
-        limit: int = 100,
-        offset: int = 0,
-        archived: bool = False
+            self,
+            db: AsyncSession,
+            user_id: int,
+            account_id: int,
+            limit: int = 100,
+            offset: int = 0,
+            archived: bool = False
     ) -> Dict[str, Any]:
         """
         Получить расширенный список диалогов с полной информацией.

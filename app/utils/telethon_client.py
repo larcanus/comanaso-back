@@ -488,7 +488,8 @@ class TelethonManager:
 
         return {
             "color": getattr(color, "color", None),
-            "backgroundEmojiId": str(getattr(color, "background_emoji_id", "")) if getattr(color, "background_emoji_id", None) else None
+            "backgroundEmojiId": str(getattr(color, "background_emoji_id", "")) if getattr(color, "background_emoji_id",
+                                                                                           None) else None
         }
 
     def _parse_entity_type(self, entity) -> str:
@@ -846,19 +847,19 @@ class TelethonManager:
 
                             # Собираем ID чатов
                             pinned_ids = [str(peer.user_id if hasattr(peer, 'user_id')
-                                             else peer.channel_id if hasattr(peer, 'channel_id')
-                                             else peer.chat_id)
-                                         for peer in getattr(filter_obj, 'pinned_peers', [])]
+                                              else peer.channel_id if hasattr(peer, 'channel_id')
+                            else peer.chat_id)
+                                          for peer in getattr(filter_obj, 'pinned_peers', [])]
 
                             included_ids = [str(peer.user_id if hasattr(peer, 'user_id')
-                                              else peer.channel_id if hasattr(peer, 'channel_id')
-                                              else peer.chat_id)
-                                          for peer in getattr(filter_obj, 'include_peers', [])]
+                                                else peer.channel_id if hasattr(peer, 'channel_id')
+                            else peer.chat_id)
+                                            for peer in getattr(filter_obj, 'include_peers', [])]
 
                             excluded_ids = [str(peer.user_id if hasattr(peer, 'user_id')
-                                              else peer.channel_id if hasattr(peer, 'channel_id')
-                                              else peer.chat_id)
-                                          for peer in getattr(filter_obj, 'exclude_peers', [])]
+                                                else peer.channel_id if hasattr(peer, 'channel_id')
+                            else peer.chat_id)
+                                            for peer in getattr(filter_obj, 'exclude_peers', [])]
 
                             folders.append({
                                 "id": filter_obj.id,

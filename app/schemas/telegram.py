@@ -269,7 +269,7 @@ class ErrorResponse(BaseModel):
     """Схема ответа с ошибкой."""
     error: str
     message: str
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
