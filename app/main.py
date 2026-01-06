@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title=settings.app_name,
     version=settings.version,
+    root_path="/comanaso",
     description="Backend API для управления Telegram аккаунтами и автоматизации",
     lifespan=lifespan,
     docs_url="/docs",
